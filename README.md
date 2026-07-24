@@ -1,0 +1,1 @@
+# bluefox.email-mcp
