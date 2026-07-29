@@ -112,7 +112,7 @@ of connecting in a broken state.
 
 ## Tools
 
-25 tools, grouped by area below. You can refer to things by name (a subscriber list, a campaign, a sender identity,
+26 tools, grouped by area below. You can refer to things by name (a subscriber list, a campaign, a sender identity,
 ...) - the server looks up the matching id for you, you never need to know or pass raw ids yourself.
 
 | Tool | What it does |
@@ -124,6 +124,7 @@ of connecting in a broken state.
 | `send_triggered_email` | Send a triggered email to a list (or specific recipients). |
 | `update_email` | Update a campaign/transactional/triggered email; also cancels/reschedules a campaign. |
 | `get_email` | Look up one email (with stats) or list all of a given type. |
+| `get_email_recipients` | Per-recipient detail for one send - who received/opened/clicked/bounced/unsubscribed, paginated. |
 | `delete_email` | Delete a campaign or triggered email. |
 | `send_test_email` | Send a one-off test send without affecting real stats. |
 | `create_contact` / `get_contact` / `update_contact` / `delete_contact` | Manage a single contact. |

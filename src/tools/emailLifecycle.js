@@ -151,6 +151,87 @@ export function createEmailLifecycleTools ({ client, resolveId, resolveIdOptiona
       }
     },
     {
+      name: 'get_email_recipients',
+      config: {
+        title: 'List recipients of an email (campaign, transactional, or triggered)',
+        description: 'Per-recipient detail for a specific send - who received it, how many times they opened/clicked, and whether they bounced/complained/unsubscribed/paused/subscribed/resubscribed as a result of THIS specific send (not their overall history). Paginated - use skip to page through more when there are more than fit in one page.',
+        inputSchema: {
+          type: z.enum(['campaign', 'transactional', 'triggered']),
+          emailId: z.string().optional(),
+          emailName: z.string().optional().describe('The email to list recipients for, by name - looked up automatically. Provide this if you do not already have the id.'),
+          email: z.string().optional().describe('Filter to a single recipient email address.'),
+          status: z.enum(['scheduled', 'being-sent', 'sent', 'failed']).optional(),
+          opened: z.boolean().optional().describe('Filter to recipients who did/did not open this send.'),
+          clicked: z.boolean().optional().describe('Filter to recipients who did/did not click a link in this send.'),
+          bounced: z.boolean().optional(),
+          complained: z.boolean().optional(),
+          unsubscribed: z.boolean().optional().describe('Filter to recipients who did/did not unsubscribe via this specific send\'s link.'),
+          paused: z.boolean().optional(),
+          subscribed: z.boolean().optional(),
+          resubscribed: z.boolean().optional(),
+          limit: z.number().optional().describe('Max recipients per page. Defaults to 10, capped at 30.'),
+          skip: z.number().optional().describe('Number of recipients to skip, for pagination.'),
+          sort: z.enum(['sentAt', 'createdAt', 'email']).optional().describe('Defaults to sentAt.'),
+          order: z.enum(['asc', 'desc']).optional().describe('Defaults to desc.')
+        }
+      },
+      handler: async (args) => {
+        const id = await resolveEmailId(args.type, { id: args.emailId, name: args.emailName })
+        const resourcePath = RESOURCE_PATH[args.type]
+
+        const filter = {}
+        if (args.email) {
+          filter.email = args.email
+        }
+        if (args.status) {
+          filter.status = args.status
+        }
+        if (args.opened !== undefined) {
+          filter.opened = args.opened
+        }
+        if (args.clicked !== undefined) {
+          filter.clicked = args.clicked
+        }
+        if (args.bounced !== undefined) {
+          filter.bounced = args.bounced
+        }
+        if (args.complained !== undefined) {
+          filter.complained = args.complained
+        }
+        if (args.unsubscribed !== undefined) {
+          filter.unsubscribed = args.unsubscribed
+        }
+        if (args.paused !== undefined) {
+          filter.paused = args.paused
+        }
+        if (args.subscribed !== undefined) {
+          filter.subscribed = args.subscribed
+        }
+        if (args.resubscribed !== undefined) {
+          filter.resubscribed = args.resubscribed
+        }
+
+        const query = { limit: args.limit, skip: args.skip, sort: args.sort, order: args.order }
+        if (Object.keys(filter).length) {
+          query.filter = filter
+        }
+
+        const result = await client.get(`${resourcePath}/${id}/recipients`, query)
+        if (result.count === 0) {
+          return textResult('No recipients match.')
+        }
+
+        const lines = result.items.map(r => {
+          const flags = ['bounced', 'complained', 'unsubscribed', 'paused', 'subscribed', 'resubscribed'].filter(f => r[f]).join(', ')
+          return `${r.email} - ${r.status}, ${r.opens} opens, ${r.clicks} clicks${flags ? ` (${flags})` : ''}`
+        })
+
+        const shownSoFar = (args.skip || 0) + result.items.length
+        const more = shownSoFar < result.count ? ` (${result.count - shownSoFar} more - pass skip=${shownSoFar} for the next page)` : ''
+        return textResult(`${result.count} recipient(s) total, showing ${result.items.length}${more}:\n${lines.join('\n')}`)
+      }
+    },
+    {
       name: 'delete_email',
       config: {
         title: 'Delete email (campaign or triggered)',

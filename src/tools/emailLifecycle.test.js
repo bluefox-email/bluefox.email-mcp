@@ -162,6 +162,97 @@ describe('get_email', () => {
   })
 })
 
+describe('get_email_recipients', () => {
+  test('reports no matches', async () => {
+    const { client, get_email_recipients: getEmailRecipients } = setup()
+    client.get.mockResolvedValue({ items: [], count: 0 })
+
+    const result = await getEmailRecipients.handler({ type: 'campaign', emailId: 'campaign123' })
+
+    expect(client.get).toHaveBeenCalledWith('/campaigns/campaign123/recipients', { limit: undefined, skip: undefined, sort: undefined, order: undefined })
+    expect(result.content[0].text).toBe('No recipients match.')
+  })
+
+  test('lists recipients with their engagement flags, and notes when more exist', async () => {
+    const { client, get_email_recipients: getEmailRecipients } = setup()
+    client.get.mockResolvedValue({
+      count: 3,
+      items: [
+        { email: 'a@example.com', status: 'sent', opens: 2, clicks: 1, bounced: false, complained: false, unsubscribed: true, paused: false, subscribed: false, resubscribed: false },
+        { email: 'b@example.com', status: 'failed', opens: 0, clicks: 0, bounced: false, complained: false, unsubscribed: false, paused: false, subscribed: false, resubscribed: false }
+      ]
+    })
+
+    const result = await getEmailRecipients.handler({ type: 'campaign', emailId: 'campaign123', skip: 0 })
+
+    expect(result.content[0].text).toBe(
+      '3 recipient(s) total, showing 2 (1 more - pass skip=2 for the next page):\n' +
+      'a@example.com - sent, 2 opens, 1 clicks (unsubscribed)\n' +
+      'b@example.com - failed, 0 opens, 0 clicks'
+    )
+  })
+
+  test('omits the "more" note when every matching recipient was shown', async () => {
+    const { client, get_email_recipients: getEmailRecipients } = setup()
+    client.get.mockResolvedValue({
+      count: 1,
+      items: [{ email: 'a@example.com', status: 'sent', opens: 0, clicks: 0, bounced: false, complained: false, unsubscribed: false, paused: false, subscribed: false, resubscribed: false }]
+    })
+
+    const result = await getEmailRecipients.handler({ type: 'transactional', emailId: 'email123' })
+
+    expect(result.content[0].text).toBe('1 recipient(s) total, showing 1:\na@example.com - sent, 0 opens, 0 clicks')
+  })
+
+  test('resolves the email by name and builds a filter object from every given filter field', async () => {
+    const { client, get_email_recipients: getEmailRecipients } = setup()
+    client.get.mockImplementation(async path => {
+      if (path === '/triggered-emails') {
+        return { items: [{ _id: 'trig123' }] }
+      }
+      return { items: [], count: 0 }
+    })
+
+    await getEmailRecipients.handler({
+      type: 'triggered',
+      emailName: 'Welcome Email',
+      email: 'a@example.com',
+      status: 'sent',
+      opened: true,
+      clicked: false,
+      bounced: true,
+      complained: false,
+      unsubscribed: true,
+      paused: false,
+      subscribed: true,
+      resubscribed: false,
+      limit: 5,
+      skip: 10,
+      sort: 'email',
+      order: 'asc'
+    })
+
+    expect(client.get).toHaveBeenCalledWith('/triggered-emails/trig123/recipients', {
+      limit: 5,
+      skip: 10,
+      sort: 'email',
+      order: 'asc',
+      filter: {
+        email: 'a@example.com',
+        status: 'sent',
+        opened: true,
+        clicked: false,
+        bounced: true,
+        complained: false,
+        unsubscribed: true,
+        paused: false,
+        subscribed: true,
+        resubscribed: false
+      }
+    })
+  })
+})
+
 describe('delete_email', () => {
   test('deletes a campaign by id', async () => {
     const { client, delete_email: deleteEmail } = setup()
