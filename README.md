@@ -64,6 +64,15 @@ Most MCP clients use the same config shape - a `command` to run plus the three e
 }
 ```
 
+**Windows:** `npm link` creates a `.cmd` shim, and most MCP clients launch the server without a shell - which
+fails silently (`spawn UNKNOWN`) for a bare command name on Windows. Use this `command`/`args` shape instead,
+everything else the same:
+
+```json
+"command": "cmd",
+"args": ["/c", "bluefox.email-mcp"],
+```
+
 Where that block goes, per client:
 
 | Client | Put it in... |
@@ -82,6 +91,8 @@ claude mcp add bluefox-email \
   --env BLUEFOX_API_KEY=YOUR_API_KEY \
   -- bluefox.email-mcp
 ```
+
+**Windows:** replace the last line with `-- cmd /c bluefox.email-mcp` (see the Windows note above).
 
 **ChatGPT**: as of now, ChatGPT's MCP support (Settings > Connectors) expects a server reachable at a URL, not a
 local command - so this local server can't be connected from ChatGPT directly. If you want AI-agent access to
