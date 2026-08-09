@@ -14,6 +14,8 @@ import { createContactFieldsAndTagsTools } from './contactFieldsAndTags.js'
 import { createSegmentTools } from './segments.js'
 import { createSuppressionListTools } from './suppressionList.js'
 import { createTemplateTools } from './templates.js'
+import { createSubscriptionTools } from './subscriptions.js'
+import { createSignUpFormTools } from './signUpForms.js'
 
 export function collectTools (deps) {
   return [
@@ -31,7 +33,9 @@ export function collectTools (deps) {
     ...createContactFieldsAndTagsTools(deps),
     ...createSegmentTools(deps),
     ...createSuppressionListTools(deps),
-    ...createTemplateTools(deps)
+    ...createTemplateTools(deps),
+    ...createSubscriptionTools(deps),
+    ...createSignUpFormTools(deps)
   ]
 }
 

@@ -33,14 +33,47 @@ describe('manage_sending_setup - domains', () => {
     )
   })
 
-  test('create adds a domain', async () => {
+  test('create adds a domain and surfaces the DNS records to set', async () => {
     const { client, manageSendingSetup } = setup()
-    client.post.mockResolvedValue({ _id: 'domain123', domain: 'example.com' })
+    client.post.mockResolvedValue({
+      _id: 'domain123',
+      domain: 'example.com',
+      requiredDns: {
+        dkimCNAMEs: [{ type: 'CNAME', name: 'tok1._domainkey.example.com', value: 'tok1.dkim.amazonses.com' }],
+        mx: { type: 'MX', name: 'example.com', value: 'feedback-smtp.us-east-1.amazonses.com', priority: '10' },
+        spf: { type: 'TXT', name: 'example.com', value: 'v=spf1 include:amazonses.com ~all' },
+        dmarc: { type: 'TXT', name: '_dmarc.example.com', value: 'v=DMARC1; p=none;' }
+      }
+    })
 
     const result = await manageSendingSetup.handler({ resource: 'domain', action: 'create', domain: 'example.com', region: 'us-east-1' })
 
     expect(client.post).toHaveBeenCalledWith('/domains', { domain: 'example.com', region: 'us-east-1' })
     expect(result.content[0].text).toContain('Added domain "example.com" (id domain123)')
+    expect(result.content[0].text).toContain('CNAME tok1._domainkey.example.com -> tok1.dkim.amazonses.com')
+    expect(result.content[0].text).toContain('MX example.com -> feedback-smtp.us-east-1.amazonses.com (priority 10)')
+    expect(result.content[0].text).toContain('TXT example.com -> v=spf1 include:amazonses.com ~all')
+    expect(result.content[0].text).toContain('TXT _dmarc.example.com -> v=DMARC1; p=none;')
+  })
+
+  test('create adds a domain and formats non-DKIM records even when dkimCNAMEs is missing', async () => {
+    const { client, manageSendingSetup } = setup()
+    client.post.mockResolvedValue({
+      _id: 'domain123',
+      domain: 'example.com',
+      requiredDns: { mx: { type: 'MX', name: 'example.com', value: 'feedback-smtp.us-east-1.amazonses.com', priority: '10' } }
+    })
+
+    const result = await manageSendingSetup.handler({ resource: 'domain', action: 'create', domain: 'example.com', region: 'us-east-1' })
+    expect(result.content[0].text).toContain('MX example.com -> feedback-smtp.us-east-1.amazonses.com (priority 10)')
+  })
+
+  test('create adds a domain even when the response has no requiredDns', async () => {
+    const { client, manageSendingSetup } = setup()
+    client.post.mockResolvedValue({ _id: 'domain123', domain: 'example.com' })
+
+    const result = await manageSendingSetup.handler({ resource: 'domain', action: 'create', domain: 'example.com', region: 'us-east-1' })
+    expect(result.content[0].text).toBe('Added domain "example.com" (id domain123). Add these DNS records, then use check_dns to verify:\n')
   })
 
   test('check_dns reports verified', async () => {
@@ -53,12 +86,17 @@ describe('manage_sending_setup - domains', () => {
     expect(result.content[0].text).toBe('Domain "example.com" DKIM is now verified.')
   })
 
-  test('check_dns reports still not verified', async () => {
+  test('check_dns reports still not verified, and re-surfaces the DNS records', async () => {
     const { client, manageSendingSetup } = setup()
-    client.post.mockResolvedValue({ domain: 'example.com', observed: { dkim: { allOk: false } } })
+    client.post.mockResolvedValue({
+      domain: 'example.com',
+      observed: { dkim: { allOk: false } },
+      requiredDns: { dkimCNAMEs: [{ type: 'CNAME', name: 'tok1._domainkey.example.com', value: 'tok1.dkim.amazonses.com' }] }
+    })
 
     const result = await manageSendingSetup.handler({ resource: 'domain', action: 'check_dns', domainId: 'domain123' })
-    expect(result.content[0].text).toBe('Domain "example.com" DKIM is still not verified.')
+    expect(result.content[0].text).toContain('Domain "example.com" DKIM is still not verified.')
+    expect(result.content[0].text).toContain('CNAME tok1._domainkey.example.com -> tok1.dkim.amazonses.com')
   })
 
   test('delete removes a domain by id', async () => {
@@ -121,5 +159,32 @@ describe('manage_sending_setup - sender identities', () => {
 
     expect(client.del).toHaveBeenCalledWith('/sender-identities/sender123')
     expect(result.content[0].text).toBe('Deleted the sender identity.')
+  })
+})
+
+describe('manage_sending_setup - regions', () => {
+  test('list reports the available regions', async () => {
+    const { client, manageSendingSetup } = setup()
+    client.get.mockResolvedValue({ regions: ['us-east-1', 'eu-west-1'] })
+
+    const result = await manageSendingSetup.handler({ resource: 'region', action: 'list' })
+
+    expect(client.get).toHaveBeenCalledWith('/regions')
+    expect(result.content[0].text).toBe('Available sending regions: us-east-1, eu-west-1.')
+  })
+
+  test('list reports when no regions are configured', async () => {
+    const { client, manageSendingSetup } = setup()
+    client.get.mockResolvedValue({ regions: [] })
+
+    const result = await manageSendingSetup.handler({ resource: 'region', action: 'list' })
+    expect(result.content[0].text).toBe('No sending regions are configured for this project yet.')
+  })
+
+  test('rejects a non-list action', async () => {
+    const { manageSendingSetup } = setup()
+
+    const result = await manageSendingSetup.handler({ resource: 'region', action: 'create' })
+    expect(result.content[0].text).toBe('Only the "list" action is supported for regions.')
   })
 })
