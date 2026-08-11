@@ -16,6 +16,10 @@ import { createSuppressionListTools } from './suppressionList.js'
 import { createTemplateTools } from './templates.js'
 import { createSubscriptionTools } from './subscriptions.js'
 import { createSignUpFormTools } from './signUpForms.js'
+import { createProductionAccessTools } from './productionAccess.js'
+import { createContactImportTools } from './contactImport.js'
+import { createContactOpsTools } from './contactOps.js'
+import { createProjectSetupTools } from './projectSetup.js'
 
 export function collectTools (deps) {
   return [
@@ -35,7 +39,11 @@ export function collectTools (deps) {
     ...createSuppressionListTools(deps),
     ...createTemplateTools(deps),
     ...createSubscriptionTools(deps),
-    ...createSignUpFormTools(deps)
+    ...createSignUpFormTools(deps),
+    ...createProductionAccessTools(deps),
+    ...createContactImportTools(deps),
+    ...createContactOpsTools(deps),
+    ...createProjectSetupTools(deps)
   ]
 }
 

@@ -1,0 +1,61 @@
+import { z } from 'zod'
+import { textResult } from '../helpers/errors.js'
+
+export function createProductionAccessTools ({ client }) {
+  return [
+    {
+      name: 'apply_for_production_access',
+      config: {
+        title: 'Apply for production access',
+        description: 'Submits a production access request for this project. Requires at least one domain with SPF, MX, and DKIM all verified first (add one with the sending-setup tools, then check_dns until it passes) - resubmitting after a decline only requires DKIM to still be verified.',
+        inputSchema: {
+          volume: z.number().describe('Expected monthly sending volume.'),
+          whyBluefox: z.string().describe('Why this project is using bluefox.email.'),
+          typeOfEmails: z.string().describe('What kind of emails will be sent.'),
+          contactsSource: z.string().describe('Where the contact list comes from.'),
+          productDescription: z.string(),
+          website: z.string()
+        }
+      },
+      handler: async (args) => {
+        const result = await client.post('/production-access', args)
+        return textResult(`Production access request submitted (status: ${result.status}).`)
+      }
+    },
+    {
+      name: 'get_production_access_status',
+      config: {
+        title: 'Get production access status',
+        description: 'Reports this project\'s production access request status, domain verification status, and current sending limits.',
+        inputSchema: {}
+      },
+      handler: async () => {
+        const result = await client.get('/production-access')
+        const parts = [`request: ${result.requestStatus}`, `domain: ${result.domainStatus}${result.verifiedDomain ? ` (${result.verifiedDomain})` : ''}`, `monthly limit: ${result.monthlyLimit}`]
+        if (result.limitIncreases?.length) {
+          const pending = result.limitIncreases.find(i => i.status === 'pending')
+          if (pending) {
+            parts.push(`pending limit increase: ${pending.requestedLimit}`)
+          }
+        }
+        return textResult(parts.join(', ') + '.')
+      }
+    },
+    {
+      name: 'request_limit_increase',
+      config: {
+        title: 'Request a sending limit increase',
+        description: 'Requests an increase to this project\'s monthly sending limit. Only available for projects already approved for production access.',
+        inputSchema: {
+          monthlyLimit: z.number().describe('The new monthly limit being requested. Must be higher than the current limit (0 is a special case allowed regardless of the current limit).'),
+          reason: z.string().describe('Why the increase is needed - at least 10 characters.')
+        }
+      },
+      handler: async (args) => {
+        const result = await client.post('/production-access/limit-increase', args)
+        const pending = result.limitIncreases[result.limitIncreases.length - 1]
+        return textResult(`Requested a limit increase to ${pending.requestedLimit} (status: ${pending.status}).`)
+      }
+    }
+  ]
+}

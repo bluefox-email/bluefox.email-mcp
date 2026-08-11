@@ -275,3 +275,33 @@ describe('delete_email', () => {
     expect(result.content[0].text).toBe('Deleted the triggered email.')
   })
 })
+
+describe('list_email_error_log', () => {
+  test('reports when there are no errors', async () => {
+    const { client, list_email_error_log: listErrors } = setup()
+    client.get.mockResolvedValue({ count: 0, items: [], unseenCount: 0 })
+
+    const result = await listErrors.handler({ type: 'campaign', emailId: 'camp123' })
+
+    expect(client.get).toHaveBeenCalledWith('/related-to/camp123/email-error-logs', { limit: undefined, skip: undefined })
+    expect(result.content[0].text).toBe('No errors logged.')
+  })
+
+  test('formats processing and delivery errors with the unseen count', async () => {
+    const { client, list_email_error_log: listErrors } = setup()
+    client.get.mockResolvedValue({
+      count: 2,
+      unseenCount: 1,
+      items: [
+        { source: 'processing', recipient: null, errorName: 'TemplateError', errorMessage: 'bad merge tag' },
+        { source: 'delivery', recipient: 'a@example.com', errorName: 'Delivery Failure', errorMessage: 'SES: rejected' }
+      ]
+    })
+
+    const result = await listErrors.handler({ type: 'campaign', emailId: 'camp123' })
+
+    expect(result.content[0].text).toContain('2 error(s), 1 unseen:')
+    expect(result.content[0].text).toContain('[processing] TemplateError: bad merge tag')
+    expect(result.content[0].text).toContain('[delivery] a@example.com Delivery Failure: SES: rejected')
+  })
+})

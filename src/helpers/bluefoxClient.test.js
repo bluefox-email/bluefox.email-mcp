@@ -136,4 +136,29 @@ describe('createBluefoxClient', () => {
 
     await expect(client.get('/campaigns')).rejects.toThrow('Request failed with status 500')
   })
+
+  test('getText() returns the raw response body instead of parsing it as JSON', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: async () => 'type,name,value\nCNAME,a,b'
+    })
+    const result = await client.getText('/domains/dom1/export/csv')
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://api.bluefox.email/v1/projectId/proj1/domains/dom1/export/csv',
+      expect.objectContaining({ method: 'GET', headers: expect.objectContaining({ Authorization: 'Bearer key1' }) })
+    )
+    expect(result).toBe('type,name,value\nCNAME,a,b')
+  })
+
+  test('getText() throws BluefoxApiError on a non-2xx response', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      json: async () => ({ status: 404, error: { name: 'NOT_FOUND', message: 'Domain not found.' } })
+    })
+
+    await expect(client.getText('/domains/dom1/export/csv')).rejects.toThrow('Domain not found.')
+  })
 })

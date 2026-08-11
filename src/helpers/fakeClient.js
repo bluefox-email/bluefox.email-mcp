@@ -9,6 +9,7 @@ export function createFakeClient (overrides = {}) {
     getAbsolute: vi.fn(),
     postAbsolute: vi.fn(),
     patchAbsolute: vi.fn(),
+    getText: vi.fn(),
     ...overrides
   }
 }

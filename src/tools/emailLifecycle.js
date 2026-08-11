@@ -247,6 +247,29 @@ export function createEmailLifecycleTools ({ client, resolveId, resolveIdOptiona
         await client.del(`${RESOURCE_PATH[args.type]}/${id}`)
         return textResult(`Deleted the ${LABEL[args.type]}.`)
       }
+    },
+    {
+      name: 'list_email_error_log',
+      config: {
+        title: 'List processing/delivery errors for an email',
+        description: 'Lists errors for a campaign, transactional email, or triggered email - both send-processing errors and delivery failures from the last 30 days, newest first. Reports how many are unseen since the log was last marked seen in the app.',
+        inputSchema: {
+          type: z.enum(['campaign', 'transactional', 'triggered']),
+          emailId: z.string().optional(),
+          emailName: z.string().optional().describe('Looked up automatically.'),
+          limit: z.number().optional(),
+          skip: z.number().optional()
+        }
+      },
+      handler: async (args) => {
+        const id = await resolveEmailId(args.type, { id: args.emailId, name: args.emailName })
+        const result = await client.get(`/related-to/${id}/email-error-logs`, { limit: args.limit, skip: args.skip })
+        if (!result.count) {
+          return textResult('No errors logged.')
+        }
+        const lines = result.items.map(item => `[${item.source}]${item.recipient ? ` ${item.recipient}` : ''} ${item.errorName}: ${item.errorMessage}`)
+        return textResult(`${result.count} error(s), ${result.unseenCount} unseen:\n${lines.join('\n')}`)
+      }
     }
   ]
 }

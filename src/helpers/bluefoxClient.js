@@ -46,6 +46,22 @@ export function createBluefoxClient ({ baseUrl, projectId, apiKey }) {
     return json?.result
   }
 
+  // A handful of export-style endpoints (CSV downloads) respond with a raw file body, via
+  // res.attachment()/res.end(), instead of the {status, result} JSON envelope every other route uses -
+  // request() above would fail to parse that as JSON and silently return undefined, so this reads it as text.
+  async function requestText (path, { query } = {}) {
+    const url = `${baseUrl}/v1/projectId/${projectId}${path}${buildQueryString(query)}`
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${apiKey}` }
+    })
+    if (!res.ok) {
+      const json = await res.json().catch(() => null)
+      throw new BluefoxApiError(res.status, json?.error)
+    }
+    return res.text()
+  }
+
   return {
     get: (path, query) => request('GET', path, { query }),
     post: (path, body) => request('POST', path, { body }),
@@ -53,6 +69,7 @@ export function createBluefoxClient ({ baseUrl, projectId, apiKey }) {
     del: path => request('DELETE', path),
     getAbsolute: (path, query) => request('GET', path, { query, absolute: true }),
     postAbsolute: (path, body) => request('POST', path, { body, absolute: true }),
-    patchAbsolute: (path, body) => request('PATCH', path, { body, absolute: true })
+    patchAbsolute: (path, body) => request('PATCH', path, { body, absolute: true }),
+    getText: (path, query) => requestText(path, { query })
   }
 }
