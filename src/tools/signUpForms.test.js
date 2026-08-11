@@ -1,7 +1,16 @@
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi, beforeEach } from 'vitest'
 import { createSignUpFormTools } from './signUpForms.js'
 import { createResolveId } from '../helpers/resolveId.js'
 import { createFakeClient } from '../helpers/fakeClient.js'
+import fs from 'fs/promises'
+
+vi.mock('fs/promises', () => ({
+  default: { writeFile: vi.fn().mockResolvedValue(undefined) }
+}))
+
+beforeEach(() => {
+  fs.writeFile.mockClear()
+})
 
 function setup () {
   const client = createFakeClient()
@@ -247,5 +256,34 @@ describe('delete_signup_form', () => {
 
     expect(client.del).toHaveBeenCalledWith('/signup-forms/form123')
     expect(result.content[0].text).toBe('Deleted the signup form.')
+  })
+})
+
+describe('get_signup_form_embed_html', () => {
+  test('resolves the form by name, writes the embed HTML to a local file, and reports the path', async () => {
+    const { client, get_signup_form_embed_html: getEmbedHtml } = setup()
+    client.get.mockResolvedValue({ items: [{ _id: 'form123' }] })
+    client.getText.mockResolvedValue('<style>...</style><form id="signupForm"></form>')
+
+    const result = await getEmbedHtml.handler({ signUpFormName: 'Newsletter form' })
+
+    expect(client.get).toHaveBeenCalledWith('/signup-forms', { filter: { name: 'Newsletter form' }, limit: 2 })
+    expect(client.getText).toHaveBeenCalledWith('/signup-forms/form123/embed')
+    expect(fs.writeFile).toHaveBeenCalledWith(
+      expect.stringContaining('bluefox-signup-form-form123-embed.html'),
+      '<style>...</style><form id="signupForm"></form>',
+      'utf8'
+    )
+    expect(result.content[0].text).toContain('Saved the embeddable form HTML to')
+  })
+
+  test('uses the id directly when given, without resolving by name', async () => {
+    const { client, get_signup_form_embed_html: getEmbedHtml } = setup()
+    client.getText.mockResolvedValue('<form id="signupForm"></form>')
+
+    await getEmbedHtml.handler({ signUpFormId: 'form123' })
+
+    expect(client.get).not.toHaveBeenCalled()
+    expect(client.getText).toHaveBeenCalledWith('/signup-forms/form123/embed')
   })
 })

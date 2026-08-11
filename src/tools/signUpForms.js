@@ -1,3 +1,6 @@
+import fs from 'fs/promises'
+import os from 'os'
+import path from 'path'
 import { z } from 'zod'
 import { textResult } from '../helpers/errors.js'
 
@@ -39,9 +42,9 @@ const styleSchema = {
 }
 
 const doubleOptInSchema = {
-  doubleOptInActive: z.boolean().optional(),
-  doubleOptInTransactionalEmailId: z.string().optional(),
-  doubleOptInTransactionalEmailName: z.string().optional().describe('The transactional email that sends the confirmation message, by name - looked up automatically. Required (id or name) if doubleOptInActive is true.'),
+  doubleOptInActive: z.boolean().optional().describe('The referenced transactional email\'s body MUST contain {{verifyLink}} - the API rejects enabling this otherwise, since that\'s the only way a contact can confirm.'),
+  doubleOptInTransactionalEmailId: z.string().optional().describe('Its body must include {{verifyLink}}.'),
+  doubleOptInTransactionalEmailName: z.string().optional().describe('The transactional email that sends the confirmation message, by name - looked up automatically. Required (id or name) if doubleOptInActive is true. Its body must include {{verifyLink}}.'),
   doubleOptInRedirectLink: z.string().optional().describe('Where to send the contact after they confirm.'),
   confirmationTitle: z.string().optional(),
   confirmationMessage: z.string().optional()
@@ -238,6 +241,30 @@ export function createSignUpFormTools ({ client, resolveId, resolveIdOptional, r
         })
         await client.del(`/signup-forms/${id}`)
         return textResult('Deleted the signup form.')
+      }
+    },
+    {
+      name: 'get_signup_form_embed_html',
+      config: {
+        title: 'Get a signup form\'s embeddable HTML',
+        description: 'Generates the same self-contained HTML (styling, markup, and captcha/submit JS included) shown on the dashboard\'s "embed" tab for this signup form, and saves it to a local file - hand that file\'s contents to whoever is pasting the form into an external site or page builder.',
+        inputSchema: {
+          signUpFormId: z.string().optional(),
+          signUpFormName: z.string().optional().describe('The form to get, by name - looked up automatically. Provide this if you do not already have the id.')
+        }
+      },
+      handler: async (args) => {
+        const id = await resolveIdOrRequired({
+          id: args.signUpFormId,
+          name: args.signUpFormName,
+          resourcePath: '/signup-forms',
+          filterField: 'name',
+          label: 'signup form'
+        })
+        const html = await client.getText(`/signup-forms/${id}/embed`)
+        const filePath = path.join(os.tmpdir(), `bluefox-signup-form-${id}-embed.html`)
+        await fs.writeFile(filePath, html, 'utf8')
+        return textResult(`Saved the embeddable form HTML to ${filePath}.`)
       }
     }
   ]
