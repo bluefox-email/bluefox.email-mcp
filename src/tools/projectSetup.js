@@ -69,34 +69,6 @@ export function createProjectSetupTools ({ client }) {
       }
     },
     {
-      name: 'add_sandbox_test_email',
-      config: {
-        title: 'Add a sandbox verified test email',
-        description: 'Sends a verification email to a recipient address so a sandbox-mode project can send test emails to it (up to 5). Only works on sandbox projects.',
-        inputSchema: {
-          email: z.string()
-        }
-      },
-      handler: async (args) => {
-        await client.post('/sandbox/emails', { email: args.email })
-        return textResult(`Sent a verification email to ${args.email}.`)
-      }
-    },
-    {
-      name: 'remove_sandbox_test_email',
-      config: {
-        title: 'Remove a sandbox verified test email',
-        description: 'Removes a previously-verified sandbox test email (and its contact/subscriptions).',
-        inputSchema: {
-          email: z.string()
-        }
-      },
-      handler: async (args) => {
-        await client.del(`/sandbox/emails/${encodeURIComponent(args.email)}`)
-        return textResult(`Removed ${args.email} from the sandbox verified emails.`)
-      }
-    },
-    {
       name: 'get_sandbox_deliverability',
       config: {
         title: 'Get sandbox sending deliverability',

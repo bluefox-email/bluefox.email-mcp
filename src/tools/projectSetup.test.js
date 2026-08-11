@@ -74,30 +74,6 @@ describe('get_cloudformation_link', () => {
   })
 })
 
-describe('add_sandbox_test_email', () => {
-  test('sends the verification request', async () => {
-    const { client, add_sandbox_test_email: addEmail } = setup()
-    client.post.mockResolvedValue({ success: true })
-
-    const result = await addEmail.handler({ email: 'a@example.com' })
-
-    expect(client.post).toHaveBeenCalledWith('/sandbox/emails', { email: 'a@example.com' })
-    expect(result.content[0].text).toBe('Sent a verification email to a@example.com.')
-  })
-})
-
-describe('remove_sandbox_test_email', () => {
-  test('removes the email', async () => {
-    const { client, remove_sandbox_test_email: removeEmail } = setup()
-    client.del.mockResolvedValue({})
-
-    const result = await removeEmail.handler({ email: 'a@example.com' })
-
-    expect(client.del).toHaveBeenCalledWith('/sandbox/emails/a%40example.com')
-    expect(result.content[0].text).toBe('Removed a@example.com from the sandbox verified emails.')
-  })
-})
-
 describe('get_sandbox_deliverability', () => {
   test('formats sent count and rates', async () => {
     const { client, get_sandbox_deliverability: getStats } = setup()
