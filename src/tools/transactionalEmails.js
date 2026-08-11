@@ -15,7 +15,8 @@ export function createTransactionalEmailTools ({ client, resolveIdOrRequired, re
           bodyType: z.enum(['html', 'text']).optional().describe('Defaults to "text" if omitted.'),
           previewText: z.string().optional().describe('Inbox preview text - ask the user for this if not given, it meaningfully affects open rates.'),
           senderIdentityId: z.string().optional(),
-          senderIdentityEmail: z.string().optional().describe('The sender identity to send from, by its email address - looked up automatically.')
+          senderIdentityEmail: z.string().optional().describe('The sender identity to send from, by its email address - looked up automatically.'),
+          replyTo: z.string().optional().describe('Reply-to email address recipients\' replies go to. Defaults to the sender identity\'s own email if omitted.')
         }
       },
       handler: async (args) => {
@@ -38,6 +39,9 @@ export function createTransactionalEmailTools ({ client, resolveIdOrRequired, re
         }
         if (senderIdentity) {
           body.senderIdentity = senderIdentity
+        }
+        if (args.replyTo) {
+          body.replyTo = args.replyTo
         }
 
         const result = await client.post('/transactional-emails', body)

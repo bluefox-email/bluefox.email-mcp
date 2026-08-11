@@ -40,6 +40,7 @@ export function createEmailLifecycleTools ({ client, resolveId, resolveIdOptiona
           previewText: z.string().optional(),
           senderIdentityId: z.string().optional(),
           senderIdentityEmail: z.string().optional().describe('Looked up automatically.'),
+          replyTo: z.string().optional().describe('Reply-to email address recipients\' replies go to.'),
           subscriberListId: z.string().optional().describe('Campaign/triggered only.'),
           subscriberListName: z.string().optional().describe('Campaign/triggered only. Looked up automatically.'),
           segmentId: z.string().optional().describe('Campaign only.'),
@@ -67,6 +68,9 @@ export function createEmailLifecycleTools ({ client, resolveId, resolveIdOptiona
         }
         if (args.excludeUnengaged !== undefined) {
           body.excludeUnengaged = args.excludeUnengaged
+        }
+        if (args.replyTo) {
+          body.replyTo = args.replyTo
         }
 
         const senderIdentity = await resolveIdOptional({

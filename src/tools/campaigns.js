@@ -20,6 +20,7 @@ export function createCampaignTools ({ client, resolveIdOrRequired, resolveIdOpt
           scheduledFor: z.string().optional().describe('ISO 8601 date-time to schedule sending. Resolve relative phrases like "tomorrow at 8am" to an absolute ISO datetime yourself before calling this tool, using the current date/time. Omit to save as a draft instead of scheduling.'),
           timeZone: z.string().optional().describe('IANA time zone (e.g. "America/New_York") used to interpret scheduledFor. Defaults to UTC.'),
           previewText: z.string().optional().describe('Inbox preview text - ask the user for this if not given, it meaningfully affects open rates.'),
+          replyTo: z.string().optional().describe('Reply-to email address recipients\' replies go to. Defaults to the sender identity\'s own email if omitted.'),
           excludeUnengaged: z.boolean().optional().describe('Skip contacts flagged as unengaged when sending.')
         }
       },
@@ -52,6 +53,9 @@ export function createCampaignTools ({ client, resolveIdOrRequired, resolveIdOpt
         }
         if (args.previewText) {
           body.previewText = args.previewText
+        }
+        if (args.replyTo) {
+          body.replyTo = args.replyTo
         }
         if (args.excludeUnengaged !== undefined) {
           body.excludeUnengaged = args.excludeUnengaged

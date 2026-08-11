@@ -52,6 +52,7 @@ describe('create_campaign', () => {
       subscriberListName: 'Newsletter',
       segmentName: 'VIP',
       previewText: 'Save big',
+      replyTo: 'support@example.com',
       excludeUnengaged: true,
       scheduledFor: '2026-08-01T08:00:00.000Z',
       timeZone: 'America/New_York'
@@ -66,6 +67,7 @@ describe('create_campaign', () => {
       document: 'Hello',
       segmentId: 'seg123',
       previewText: 'Save big',
+      replyTo: 'support@example.com',
       excludeUnengaged: true,
       status: 'scheduled',
       scheduledTo: '2026-08-01T08:00:00.000Z'

@@ -28,7 +28,7 @@ describe('create_transactional_email', () => {
     expect(result.content[0].text).toBe('Created transactional email "Order Confirmation" (id email123).')
   })
 
-  test('creates with previewText and a sender identity resolved by email', async () => {
+  test('creates with previewText, replyTo, and a sender identity resolved by email', async () => {
     const { client, create_transactional_email: createTransactionalEmail } = setup()
     client.get.mockResolvedValue({ items: [{ _id: 'sender123' }] })
     client.post.mockResolvedValue({ _id: 'email123', name: 'Order Confirmation' })
@@ -39,7 +39,8 @@ describe('create_transactional_email', () => {
       body: 'Thanks!',
       bodyType: 'html',
       previewText: 'Your order has shipped',
-      senderIdentityEmail: 'orders@example.com'
+      senderIdentityEmail: 'orders@example.com',
+      replyTo: 'support@example.com'
     })
 
     expect(client.post).toHaveBeenCalledWith('/transactional-emails', {
@@ -48,7 +49,8 @@ describe('create_transactional_email', () => {
       type: 'html',
       document: 'Thanks!',
       previewText: 'Your order has shipped',
-      senderIdentity: 'sender123'
+      senderIdentity: 'sender123',
+      replyTo: 'support@example.com'
     })
   })
 })

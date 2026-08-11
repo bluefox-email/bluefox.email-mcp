@@ -18,6 +18,7 @@ export function createTriggeredEmailTools ({ client, resolveIdOrRequired, resolv
           previewText: z.string().optional().describe('Inbox preview text - ask the user for this if not given, it meaningfully affects open rates.'),
           senderIdentityId: z.string().optional(),
           senderIdentityEmail: z.string().optional().describe('Looked up automatically.'),
+          replyTo: z.string().optional().describe('Reply-to email address recipients\' replies go to. Defaults to the sender identity\'s own email if omitted.'),
           excludeUnengaged: z.boolean().optional()
         }
       },
@@ -49,6 +50,9 @@ export function createTriggeredEmailTools ({ client, resolveIdOrRequired, resolv
         }
         if (senderIdentity) {
           body.senderIdentity = senderIdentity
+        }
+        if (args.replyTo) {
+          body.replyTo = args.replyTo
         }
         if (args.excludeUnengaged !== undefined) {
           body.excludeUnengaged = args.excludeUnengaged

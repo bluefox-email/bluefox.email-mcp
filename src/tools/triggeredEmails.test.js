@@ -34,7 +34,7 @@ describe('create_triggered_email', () => {
     expect(result.content[0].text).toBe('Created triggered email "Welcome Email" (id trig123).')
   })
 
-  test('creates with previewText, excludeUnengaged, and resolves list/sender by name', async () => {
+  test('creates with previewText, replyTo, excludeUnengaged, and resolves list/sender by name', async () => {
     const { client, create_triggered_email: createTriggeredEmail } = setup()
     client.get.mockImplementation(async path => {
       if (path === '/subscriber-lists') {
@@ -52,6 +52,7 @@ describe('create_triggered_email', () => {
       subscriberListName: 'Newsletter',
       previewText: 'Glad you joined',
       senderIdentityEmail: 'hello@example.com',
+      replyTo: 'support@example.com',
       excludeUnengaged: true
     })
 
@@ -63,6 +64,7 @@ describe('create_triggered_email', () => {
       document: 'Hi there',
       previewText: 'Glad you joined',
       senderIdentity: 'sender123',
+      replyTo: 'support@example.com',
       excludeUnengaged: true
     })
   })
