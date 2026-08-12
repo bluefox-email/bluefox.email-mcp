@@ -31,10 +31,12 @@ describe('update_email', () => {
       newName: 'Summer Sale v2',
       subject: 'New subject',
       body: 'New body',
+      bodyType: 'html',
       previewText: 'New preview',
       excludeUnengaged: true,
       senderIdentityEmail: 'hello@example.com',
       replyTo: 'support@example.com',
+      feeds: [{ url: 'https://example.com/feed.xml', feedType: 'rss-xml', variableName: 'news' }],
       subscriberListName: 'Newsletter',
       segmentName: 'VIP',
       status: 'scheduled',
@@ -45,9 +47,11 @@ describe('update_email', () => {
       name: 'Summer Sale v2',
       subject: 'New subject',
       document: 'New body',
+      type: 'html',
       previewText: 'New preview',
       excludeUnengaged: true,
       replyTo: 'support@example.com',
+      feeds: [{ url: 'https://example.com/feed.xml', feedType: 'rss-xml', variableName: 'news' }],
       senderIdentity: 'sender123',
       subscriberListId: 'list123',
       segmentId: 'seg123',
@@ -275,6 +279,16 @@ describe('delete_email', () => {
 
     expect(client.del).toHaveBeenCalledWith('/triggered-emails/trig123')
     expect(result.content[0].text).toBe('Deleted the triggered email.')
+  })
+
+  test('deletes a transactional email by id', async () => {
+    const { client, delete_email: deleteEmail } = setup()
+    client.del.mockResolvedValue({})
+
+    const result = await deleteEmail.handler({ type: 'transactional', emailId: 'email123' })
+
+    expect(client.del).toHaveBeenCalledWith('/transactional-emails/email123')
+    expect(result.content[0].text).toBe('Deleted the transactional email.')
   })
 })
 

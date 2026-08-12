@@ -74,4 +74,30 @@ describe('create_campaign', () => {
     })
     expect(result.content[0].text).toBe('Created campaign "Summer Sale" (id campaign123) and scheduled for 2026-08-01T08:00:00.000Z.')
   })
+
+  test('creates with a sender identity resolved by email and a feed', async () => {
+    const { client, createCampaign } = setup()
+    client.get.mockResolvedValue({ items: [{ _id: 'sender123' }] })
+    client.post.mockResolvedValue({ _id: 'campaign123', name: 'Summer Sale' })
+
+    await createCampaign.handler({
+      name: 'Summer Sale',
+      subject: 'Big discounts',
+      body: 'Hello',
+      subscriberListId: 'list123',
+      senderIdentityEmail: 'promo@example.com',
+      feeds: [{ url: 'https://example.com/feed.xml', feedType: 'rss-xml', variableName: 'news' }]
+    })
+
+    expect(client.post).toHaveBeenCalledWith('/campaigns', {
+      name: 'Summer Sale',
+      subject: 'Big discounts',
+      timeZone: 'UTC',
+      subscriberListId: 'list123',
+      type: 'text',
+      document: 'Hello',
+      senderIdentity: 'sender123',
+      feeds: [{ url: 'https://example.com/feed.xml', feedType: 'rss-xml', variableName: 'news' }]
+    })
+  })
 })

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { textResult } from '../helpers/errors.js'
+import { feedsSchema } from './feedsSchema.js'
 
 const RESOURCE_PATH = {
   campaign: '/campaigns',
@@ -37,10 +38,12 @@ export function createEmailLifecycleTools ({ client, resolveId, resolveIdOptiona
           newName: z.string().optional(),
           subject: z.string().optional(),
           body: z.string().optional().describe('Replaces the email body (a Handlebars template string).'),
+          bodyType: z.enum(['html', 'text']).optional().describe('Switches the body between plain html/text authoring. Omit to keep using the visual (Chamaileon) editor document - only set this alongside body when authoring as html/text.'),
           previewText: z.string().optional(),
           senderIdentityId: z.string().optional(),
           senderIdentityEmail: z.string().optional().describe('Looked up automatically.'),
           replyTo: z.string().optional().describe('Reply-to email address recipients\' replies go to.'),
+          feeds: feedsSchema.optional().describe('Replaces the whole feeds list.'),
           subscriberListId: z.string().optional().describe('Campaign/triggered only.'),
           subscriberListName: z.string().optional().describe('Campaign/triggered only. Looked up automatically.'),
           segmentId: z.string().optional().describe('Campaign only.'),
@@ -63,6 +66,9 @@ export function createEmailLifecycleTools ({ client, resolveId, resolveIdOptiona
         if (args.body) {
           body.document = args.body
         }
+        if (args.bodyType) {
+          body.type = args.bodyType
+        }
         if (args.previewText) {
           body.previewText = args.previewText
         }
@@ -71,6 +77,9 @@ export function createEmailLifecycleTools ({ client, resolveId, resolveIdOptiona
         }
         if (args.replyTo) {
           body.replyTo = args.replyTo
+        }
+        if (args.feeds) {
+          body.feeds = args.feeds
         }
 
         const senderIdentity = await resolveIdOptional({
@@ -238,10 +247,10 @@ export function createEmailLifecycleTools ({ client, resolveId, resolveIdOptiona
     {
       name: 'delete_email',
       config: {
-        title: 'Delete email (campaign or triggered)',
-        description: 'Deletes a campaign or triggered email. (Deleting a transactional email is not supported by this tool.)',
+        title: 'Delete email (campaign, transactional, or triggered)',
+        description: 'Deletes a campaign, transactional email, or triggered email.',
         inputSchema: {
-          type: z.enum(['campaign', 'triggered']),
+          type: z.enum(['campaign', 'transactional', 'triggered']),
           emailId: z.string().optional(),
           emailName: z.string().optional().describe('Looked up automatically.')
         }

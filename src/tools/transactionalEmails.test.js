@@ -53,6 +53,26 @@ describe('create_transactional_email', () => {
       replyTo: 'support@example.com'
     })
   })
+
+  test('creates with a feed', async () => {
+    const { client, create_transactional_email: createTransactionalEmail } = setup()
+    client.post.mockResolvedValue({ _id: 'email123', name: 'Order Confirmation' })
+
+    await createTransactionalEmail.handler({
+      name: 'Order Confirmation',
+      subject: 'Your order',
+      body: 'Thanks!',
+      feeds: [{ url: 'https://example.com/feed.json', feedType: 'json', variableName: 'related' }]
+    })
+
+    expect(client.post).toHaveBeenCalledWith('/transactional-emails', {
+      name: 'Order Confirmation',
+      subject: 'Your order',
+      type: 'text',
+      document: 'Thanks!',
+      feeds: [{ url: 'https://example.com/feed.json', feedType: 'json', variableName: 'related' }]
+    })
+  })
 })
 
 describe('send_transactional_email', () => {

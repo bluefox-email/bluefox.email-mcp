@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { textResult } from '../helpers/errors.js'
+import { feedsSchema } from './feedsSchema.js'
 
 export function createCampaignTools ({ client, resolveIdOrRequired, resolveIdOptional }) {
   return [
@@ -20,8 +21,11 @@ export function createCampaignTools ({ client, resolveIdOrRequired, resolveIdOpt
           scheduledFor: z.string().optional().describe('ISO 8601 date-time to schedule sending. Resolve relative phrases like "tomorrow at 8am" to an absolute ISO datetime yourself before calling this tool, using the current date/time. Omit to save as a draft instead of scheduling.'),
           timeZone: z.string().optional().describe('IANA time zone (e.g. "America/New_York") used to interpret scheduledFor. Defaults to UTC.'),
           previewText: z.string().optional().describe('Inbox preview text - ask the user for this if not given, it meaningfully affects open rates.'),
+          senderIdentityId: z.string().optional(),
+          senderIdentityEmail: z.string().optional().describe('The sender identity to send from, by its email address - looked up automatically.'),
           replyTo: z.string().optional().describe('Reply-to email address recipients\' replies go to. Defaults to the sender identity\'s own email if omitted.'),
-          excludeUnengaged: z.boolean().optional().describe('Skip contacts flagged as unengaged when sending.')
+          excludeUnengaged: z.boolean().optional().describe('Skip contacts flagged as unengaged when sending.'),
+          feeds: feedsSchema.optional()
         }
       },
       handler: async (args) => {
@@ -39,6 +43,13 @@ export function createCampaignTools ({ client, resolveIdOrRequired, resolveIdOpt
           filterField: 'name',
           label: 'segment'
         })
+        const senderIdentity = await resolveIdOptional({
+          id: args.senderIdentityId,
+          name: args.senderIdentityEmail,
+          resourcePath: '/sender-identities',
+          filterField: 'email',
+          label: 'sender identity'
+        })
 
         const body = {
           name: args.name,
@@ -54,11 +65,17 @@ export function createCampaignTools ({ client, resolveIdOrRequired, resolveIdOpt
         if (args.previewText) {
           body.previewText = args.previewText
         }
+        if (senderIdentity) {
+          body.senderIdentity = senderIdentity
+        }
         if (args.replyTo) {
           body.replyTo = args.replyTo
         }
         if (args.excludeUnengaged !== undefined) {
           body.excludeUnengaged = args.excludeUnengaged
+        }
+        if (args.feeds) {
+          body.feeds = args.feeds
         }
         if (args.scheduledFor) {
           body.status = 'scheduled'

@@ -68,6 +68,28 @@ describe('create_triggered_email', () => {
       excludeUnengaged: true
     })
   })
+
+  test('creates with a feed', async () => {
+    const { client, create_triggered_email: createTriggeredEmail } = setup()
+    client.post.mockResolvedValue({ _id: 'trig123', name: 'Welcome Email' })
+
+    await createTriggeredEmail.handler({
+      name: 'Welcome Email',
+      subject: 'Welcome!',
+      body: 'Hi there',
+      subscriberListId: 'list123',
+      feeds: [{ url: 'https://example.com/feed.xml', feedType: 'rss-xml', variableName: 'news', maxItems: 3, required: true, availableFields: ['title', 'link'] }]
+    })
+
+    expect(client.post).toHaveBeenCalledWith('/triggered-emails', {
+      name: 'Welcome Email',
+      subject: 'Welcome!',
+      subscriberListId: 'list123',
+      type: 'text',
+      document: 'Hi there',
+      feeds: [{ url: 'https://example.com/feed.xml', feedType: 'rss-xml', variableName: 'news', maxItems: 3, required: true, availableFields: ['title', 'link'] }]
+    })
+  })
 })
 
 describe('send_triggered_email', () => {

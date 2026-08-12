@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { textResult } from '../helpers/errors.js'
+import { feedsSchema } from './feedsSchema.js'
 
 export function createTriggeredEmailTools ({ client, resolveIdOrRequired, resolveIdOptional }) {
   return [
@@ -19,7 +20,8 @@ export function createTriggeredEmailTools ({ client, resolveIdOrRequired, resolv
           senderIdentityId: z.string().optional(),
           senderIdentityEmail: z.string().optional().describe('Looked up automatically.'),
           replyTo: z.string().optional().describe('Reply-to email address recipients\' replies go to. Defaults to the sender identity\'s own email if omitted.'),
-          excludeUnengaged: z.boolean().optional()
+          excludeUnengaged: z.boolean().optional(),
+          feeds: feedsSchema.optional()
         }
       },
       handler: async (args) => {
@@ -56,6 +58,9 @@ export function createTriggeredEmailTools ({ client, resolveIdOrRequired, resolv
         }
         if (args.excludeUnengaged !== undefined) {
           body.excludeUnengaged = args.excludeUnengaged
+        }
+        if (args.feeds) {
+          body.feeds = args.feeds
         }
 
         const result = await client.post('/triggered-emails', body)
