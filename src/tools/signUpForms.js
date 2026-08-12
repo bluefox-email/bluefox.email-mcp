@@ -41,6 +41,16 @@ const styleSchema = {
   termsAndConditionsLink: z.string().optional()
 }
 
+const contactFieldsSchema = {
+  contactFields: z.array(z.object({
+    name: z.string().describe('The custom contact field\'s name - use manage_contact_fields_and_tags (action: list) to see what exists on the project.'),
+    show: z.boolean().optional().describe('Whether this field appears on the form. Defaults to false (hidden) the first time a field is configured.'),
+    required: z.boolean().optional(),
+    placeholder: z.string().optional(),
+    order: z.number().optional().describe('Display position relative to other visible fields - lower shows first.')
+  })).optional().describe('Per-field show/hide, required, placeholder, and order for the project\'s custom contact fields on this form. The built-in email field is controlled separately via emailPlaceholder (always shown and required). Only the fields listed here are changed - any other field\'s existing settings are left as-is.')
+}
+
 const doubleOptInSchema = {
   doubleOptInActive: z.boolean().optional().describe('The referenced transactional email\'s body MUST contain {{verifyLink}} - the API rejects enabling this otherwise, since that\'s the only way a contact can confirm.'),
   doubleOptInTransactionalEmailId: z.string().optional().describe('Its body must include {{verifyLink}}.'),
@@ -67,6 +77,20 @@ function buildStyleBody (args) {
     }
   }
   return body
+}
+
+function mergePropertiesStyle (contactFields, current = {}) {
+  const propertiesStyle = { ...current }
+  for (const field of contactFields) {
+    propertiesStyle[field.name] = {
+      ...current[field.name],
+      ...(field.show !== undefined && { show: field.show }),
+      ...(field.required !== undefined && { required: field.required }),
+      ...(field.placeholder !== undefined && { placeholder: field.placeholder }),
+      ...(field.order !== undefined && { order: field.order })
+    }
+  }
+  return propertiesStyle
 }
 
 function formatForm (item) {
@@ -99,12 +123,13 @@ export function createSignUpFormTools ({ client, resolveId, resolveIdOptional, r
       name: 'create_signup_form',
       config: {
         title: 'Create a signup form',
-        description: 'Creates a signup form - with an optional captcha (built-in svg or Cloudflare Turnstile) and double opt-in - that subscribes contacts to one or more subscriber lists.',
+        description: 'Creates a signup form - with an optional captcha (built-in svg or Cloudflare Turnstile), double opt-in, and per-field visibility/required/order for the project\'s custom contact fields (contactFields) - that subscribes contacts to one or more subscriber lists.',
         inputSchema: {
           name: z.string(),
           subscriberListIds: z.array(z.string()).optional(),
           subscriberListNames: z.array(z.string()).optional().describe('Lists to subscribe to, by name - looked up automatically. Merged with subscriberListIds if both are given.'),
           ...doubleOptInSchema,
+          ...contactFieldsSchema,
           ...styleSchema
         }
       },
@@ -114,6 +139,10 @@ export function createSignUpFormTools ({ client, resolveId, resolveIdOptional, r
         const subscriberListIds = await resolveSubscriberListIds(args)
         if (subscriberListIds.length) {
           body.subscriberListIds = subscriberListIds
+        }
+
+        if (args.contactFields?.length) {
+          body.propertiesStyle = mergePropertiesStyle(args.contactFields)
         }
 
         if (args.doubleOptInActive || args.doubleOptInTransactionalEmailId || args.doubleOptInTransactionalEmailName) {
@@ -135,7 +164,7 @@ export function createSignUpFormTools ({ client, resolveId, resolveIdOptional, r
       name: 'update_signup_form',
       config: {
         title: 'Update a signup form',
-        description: 'Updates an existing signup form\'s name, target lists, captcha/Turnstile settings, styling, or double opt-in configuration.',
+        description: 'Updates an existing signup form\'s name, target lists, captcha/Turnstile settings, styling, double opt-in configuration, or per-field contact field settings (contactFields).',
         inputSchema: {
           signUpFormId: z.string().optional(),
           signUpFormName: z.string().optional().describe('The form to update, by name - looked up automatically. Provide this if you do not already have the id.'),
@@ -143,6 +172,7 @@ export function createSignUpFormTools ({ client, resolveId, resolveIdOptional, r
           subscriberListIds: z.array(z.string()).optional(),
           subscriberListNames: z.array(z.string()).optional().describe('Replaces the form\'s target lists (merged with subscriberListIds if both given) - looked up automatically.'),
           ...doubleOptInSchema,
+          ...contactFieldsSchema,
           ...styleSchema
         }
       },
@@ -171,10 +201,16 @@ export function createSignUpFormTools ({ client, resolveId, resolveIdOptional, r
           args.doubleOptInRedirectLink ||
           args.confirmationTitle ||
           args.confirmationMessage
+        const wantsContactFieldsChange = args.contactFields?.length > 0
+
+        // doubleOptIn and propertiesStyle are nested objects the API replaces wholesale when given, not
+        // deep-merged - fetch the current form first so fields the caller didn't mention aren't wiped out.
+        let current
+        if (wantsDoubleOptInChange || wantsContactFieldsChange) {
+          current = await client.get(`/signup-forms/${id}`)
+        }
+
         if (wantsDoubleOptInChange) {
-          // doubleOptIn is a nested object the API replaces wholesale when given, not deep-merged - fetch the
-          // current one first so fields the caller didn't mention aren't silently wiped out.
-          const current = await client.get(`/signup-forms/${id}`)
           const emailId = await resolveDoubleOptInEmailId(args)
           body.doubleOptIn = {
             ...current.doubleOptIn,
@@ -184,6 +220,10 @@ export function createSignUpFormTools ({ client, resolveId, resolveIdOptional, r
             confirmationTitle: args.confirmationTitle || current.doubleOptIn?.confirmationTitle,
             confirmationMessage: args.confirmationMessage || current.doubleOptIn?.confirmationMessage
           }
+        }
+
+        if (wantsContactFieldsChange) {
+          body.propertiesStyle = mergePropertiesStyle(args.contactFields, current.propertiesStyle)
         }
 
         const result = await client.patch(`/signup-forms/${id}`, body)

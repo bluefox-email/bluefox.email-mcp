@@ -86,6 +86,28 @@ describe('create_signup_form', () => {
       }
     })
   })
+
+  test('creates a form with per-field contact field visibility, required, placeholder, and order', async () => {
+    const { client, create_signup_form: createSignUpForm } = setup()
+    client.post.mockResolvedValue({ _id: 'form123', name: 'Newsletter form' })
+
+    await createSignUpForm.handler({
+      name: 'Newsletter form',
+      contactFields: [
+        { name: 'firstName', show: true, required: true, placeholder: 'First name', order: 0 },
+        { name: 'company', show: false }
+      ]
+    })
+
+    expect(client.get).not.toHaveBeenCalled()
+    expect(client.post).toHaveBeenCalledWith('/signup-forms', {
+      name: 'Newsletter form',
+      propertiesStyle: {
+        firstName: { show: true, required: true, placeholder: 'First name', order: 0 },
+        company: { show: false }
+      }
+    })
+  })
 })
 
 describe('update_signup_form', () => {
@@ -196,6 +218,58 @@ describe('update_signup_form', () => {
     await updateSignUpForm.handler({ signUpFormId: 'form123', subscriberListIds: ['list123'], subscriberListNames: ['VIP'] })
 
     expect(client.patch).toHaveBeenCalledWith('/signup-forms/form123', { subscriberListIds: ['list123', 'list456'] })
+  })
+
+  test('merges per-field contact field settings into the existing propertiesStyle, preserving other fields and unmentioned sub-keys', async () => {
+    const { client, update_signup_form: updateSignUpForm } = setup()
+    client.get.mockResolvedValue({
+      propertiesStyle: {
+        firstName: { show: true, required: true, placeholder: 'First', order: 0 },
+        company: { show: true, placeholder: 'Company' }
+      }
+    })
+    client.patch.mockResolvedValue({ name: 'Newsletter form' })
+
+    await updateSignUpForm.handler({
+      signUpFormId: 'form123',
+      contactFields: [
+        { name: 'firstName', placeholder: 'New first' },
+        { name: 'lastName', show: true, order: 1 }
+      ]
+    })
+
+    expect(client.get).toHaveBeenCalledWith('/signup-forms/form123')
+    expect(client.patch).toHaveBeenCalledWith('/signup-forms/form123', {
+      propertiesStyle: {
+        firstName: { show: true, required: true, placeholder: 'New first', order: 0 },
+        company: { show: true, placeholder: 'Company' },
+        lastName: { show: true, order: 1 }
+      }
+    })
+  })
+
+  test('fetches the current form only once when both doubleOptIn and contact field changes are given together', async () => {
+    const { client, update_signup_form: updateSignUpForm } = setup()
+    client.get.mockResolvedValue({ doubleOptIn: { active: true, confirmationTitle: 'Existing title' }, propertiesStyle: {} })
+    client.patch.mockResolvedValue({ name: 'Newsletter form' })
+
+    await updateSignUpForm.handler({
+      signUpFormId: 'form123',
+      confirmationMessage: 'New message',
+      contactFields: [{ name: 'firstName', show: true }]
+    })
+
+    expect(client.get).toHaveBeenCalledTimes(1)
+    expect(client.patch).toHaveBeenCalledWith('/signup-forms/form123', {
+      doubleOptIn: {
+        active: true,
+        confirmationTitle: 'Existing title',
+        emailId: undefined,
+        redirectLink: undefined,
+        confirmationMessage: 'New message'
+      },
+      propertiesStyle: { firstName: { show: true } }
+    })
   })
 })
 
