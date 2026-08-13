@@ -22,12 +22,12 @@ export function createSendingSetupTools ({ client }) {
       name: 'manage_sending_setup',
       config: {
         title: 'Manage sending domains, sender identities, and regions',
-        description: 'Lists, adds, checks DNS verification for, or removes the domains and sender identities emails are sent from, and lists the AWS regions this project can send from. A sender identity\'s email address domain must already be added and DKIM-verified before it can be created. Domain create/check_dns/delete are not available on BYO AWS SES projects - listing domains, sender identity actions, and listing regions work on any project type. Regions only support the "list" action.',
+        description: 'Lists, adds, checks DNS verification for, removes, or sets the default of the domains and sender identities emails are sent from, and lists the AWS regions this project can send from. A sender identity\'s email address domain must already be added and DKIM-verified before it can be created. There is no separate "default" flag - the first sender identity in the list is the default; use set_default to change which one that is. Domain create/check_dns/delete are not available on BYO AWS SES projects - listing domains, sender identity actions, and listing regions work on any project type. Regions only support the "list" action.',
         inputSchema: {
           resource: z.enum(['domain', 'sender_identity', 'region']),
-          action: z.enum(['list', 'create', 'delete', 'check_dns']).describe('check_dns is domain-only - re-checks DNS records and can auto-create a default sender identity once DKIM passes. Regions only support list.'),
+          action: z.enum(['list', 'create', 'delete', 'check_dns', 'set_default']).describe('check_dns is domain-only - re-checks DNS records and can auto-create a default sender identity once DKIM passes. set_default is sender_identity-only - moves it to the front of the list. Regions only support list.'),
           domainId: z.string().optional().describe('Required for domain delete/check_dns.'),
-          senderIdentityId: z.string().optional().describe('Required for sender_identity delete.'),
+          senderIdentityId: z.string().optional().describe('Required for sender_identity delete/set_default.'),
           domain: z.string().optional().describe('domain create only, e.g. "example.com".'),
           region: z.string().optional().describe('Required for domain/sender_identity create - an AWS region this project is set up to send from. Use resource: "region", action: "list" to see valid values first.'),
           email: z.string().optional().describe('sender_identity create only - the from-address to send as. Its domain must already be a verified domain in the given region.'),
@@ -57,8 +57,8 @@ export function createSendingSetupTools ({ client }) {
             const summary = list.items.map(d => `${d.domain} (${d.region}) - DKIM ${d.observed?.dkim?.allOk ? 'verified' : 'not verified'}`).join('; ')
             return textResult(`${list.count} domain(s): ${summary}.`)
           }
-          const summary = list.items.map(s => `${s.email}${s.name ? ` (${s.name})` : ''}`).join(', ')
-          return textResult(`${list.count} sender identit(y/ies): ${summary}.`)
+          const summary = list.items.map((s, i) => `${s.email}${s.name ? ` (${s.name})` : ''}${i === 0 ? ' [default]' : ''}`).join(', ')
+          return textResult(`${list.count} sender identit(y/ies): ${summary}. The default is whichever one is sent from when an email doesn't specify a sender identity - it's always the first one in this list.`)
         }
 
         if (args.action === 'create') {
@@ -78,6 +78,11 @@ export function createSendingSetupTools ({ client }) {
           }
           const dns = formatRequiredDns(result.requiredDns)
           return textResult(`Domain "${result.domain}" DKIM is still not verified. Make sure these DNS records are set:\n${dns}`)
+        }
+
+        if (args.action === 'set_default') {
+          const result = await client.post(`/sender-identities/${args.senderIdentityId}/set-default`)
+          return textResult(`"${result.email}" is now the default sender identity.`)
         }
 
         const id = args.resource === 'domain' ? args.domainId : args.senderIdentityId

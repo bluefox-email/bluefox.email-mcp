@@ -11,12 +11,20 @@ function setup () {
 describe('manage_project_settings', () => {
   test('get returns a summary', async () => {
     const { client, manageProjectSettings } = setup()
-    client.get.mockResolvedValue({ name: 'My Project', status: 'production', logoUrl: 'https://example.com/logo.png', autoRemoveFromList: { bounce: 'deleteContact', complaint: 'off' } })
+    client.get.mockResolvedValue({ name: 'My Project', status: 'production', logoUrl: 'https://example.com/logo.png', autoRemoveFromList: { bounce: 'deleteContact', complaint: 'off' }, whiteList: ['example.com', 'shop.example.com'] })
 
     const result = await manageProjectSettings.handler({ action: 'get' })
 
     expect(client.get).toHaveBeenCalledWith('')
-    expect(result.content[0].text).toBe('Project "My Project" - status: production, logoUrl: https://example.com/logo.png, auto-remove on bounce: deleteContact, auto-remove on complaint: off.')
+    expect(result.content[0].text).toBe('Project "My Project" - status: production, logoUrl: https://example.com/logo.png, auto-remove on bounce: deleteContact, auto-remove on complaint: off, domain whitelist: example.com, shop.example.com.')
+  })
+
+  test('get reports no domain whitelist when unset', async () => {
+    const { client, manageProjectSettings } = setup()
+    client.get.mockResolvedValue({ name: 'My Project', status: 'sandbox' })
+
+    const result = await manageProjectSettings.handler({ action: 'get' })
+    expect(result.content[0].text).toContain('domain whitelist: none.')
   })
 
   test('get defaults auto-remove modes to removeFromLists when unset', async () => {
@@ -24,7 +32,7 @@ describe('manage_project_settings', () => {
     client.get.mockResolvedValue({ name: 'My Project', status: 'sandbox' })
 
     const result = await manageProjectSettings.handler({ action: 'get' })
-    expect(result.content[0].text).toContain('auto-remove on bounce: removeFromLists, auto-remove on complaint: removeFromLists.')
+    expect(result.content[0].text).toContain('auto-remove on bounce: removeFromLists, auto-remove on complaint: removeFromLists,')
   })
 
   test('get reports no logo when none is set', async () => {
@@ -59,6 +67,24 @@ describe('manage_project_settings', () => {
       logoUrl: 'https://example.com/logo.png',
       unengagedContactSegment: { groups: [{ conditions: [{ operator: 'not-opened' }] }] }
     })
+  })
+
+  test('update replaces the domain whitelist', async () => {
+    const { client, manageProjectSettings } = setup()
+    client.patch.mockResolvedValue({ name: 'My Project' })
+
+    await manageProjectSettings.handler({ action: 'update', domainWhitelist: ['example.com'] })
+
+    expect(client.patch).toHaveBeenCalledWith('', { whiteList: ['example.com'] })
+  })
+
+  test('update clears the domain whitelist with an empty array', async () => {
+    const { client, manageProjectSettings } = setup()
+    client.patch.mockResolvedValue({ name: 'My Project' })
+
+    await manageProjectSettings.handler({ action: 'update', domainWhitelist: [] })
+
+    expect(client.patch).toHaveBeenCalledWith('', { whiteList: [] })
   })
 
   test('update sets both auto-remove modes at once without an extra lookup', async () => {

@@ -136,7 +136,7 @@ export function createSubscriberListTools ({ client, resolveIdOptional, resolveI
           if (list.count === 0) {
             return textResult('This project has no subscriber lists yet.')
           }
-          const names = list.items.map(item => item.name).join(', ')
+          const names = list.items.map(item => `${item.name}${item.private ? ' (private)' : ''}`).join(', ')
           return textResult(`${list.count} subscriber list(s): ${names}${list.count > list.items.length ? ' (more not shown)' : ''}.`)
         }
 
@@ -152,7 +152,8 @@ export function createSubscriberListTools ({ client, resolveIdOptional, resolveI
           client.get(`/subscriber-lists/${id}/stats`)
         ])
         return textResult(
-          `"${detail.name}" - ${detail.description || 'no description'}. ` +
+          `"${detail.name}" - ${detail.description || 'no description'}. ${detail.private ? 'Private' : 'Public'}. ` +
+          `Double opt-in: ${detail.doubleOptIn?.active ? 'on' : 'off'}. ` +
           `${stats.active} active, ${stats.paused} paused, ${stats.unsubscribed} unsubscribed, ${stats.unverified} unverified.`
         )
       }

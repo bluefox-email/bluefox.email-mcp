@@ -119,12 +119,15 @@ describe('manage_sending_setup - sender identities', () => {
     expect(result.content[0].text).toBe('No sender identities have been added yet.')
   })
 
-  test('list summarizes sender identities', async () => {
+  test('list summarizes sender identities, marking the first as default', async () => {
     const { client, manageSendingSetup } = setup()
-    client.get.mockResolvedValue({ count: 1, items: [{ email: 'hello@example.com', name: 'Support' }] })
+    client.get.mockResolvedValue({
+      count: 2,
+      items: [{ email: 'hello@example.com', name: 'Support' }, { email: 'sales@example.com', name: 'Sales' }]
+    })
 
     const result = await manageSendingSetup.handler({ resource: 'sender_identity', action: 'list' })
-    expect(result.content[0].text).toBe('1 sender identit(y/ies): hello@example.com (Support).')
+    expect(result.content[0].text).toContain('hello@example.com (Support) [default], sales@example.com (Sales).')
   })
 
   test('list summarizes a sender identity with no display name', async () => {
@@ -132,7 +135,7 @@ describe('manage_sending_setup - sender identities', () => {
     client.get.mockResolvedValue({ count: 1, items: [{ email: 'hello@example.com' }] })
 
     const result = await manageSendingSetup.handler({ resource: 'sender_identity', action: 'list' })
-    expect(result.content[0].text).toBe('1 sender identit(y/ies): hello@example.com.')
+    expect(result.content[0].text).toContain('1 sender identit(y/ies): hello@example.com [default].')
   })
 
   test('create adds a sender identity', async () => {
@@ -159,6 +162,16 @@ describe('manage_sending_setup - sender identities', () => {
 
     expect(client.del).toHaveBeenCalledWith('/sender-identities/sender123')
     expect(result.content[0].text).toBe('Deleted the sender identity.')
+  })
+
+  test('set_default moves a sender identity to the front', async () => {
+    const { client, manageSendingSetup } = setup()
+    client.post.mockResolvedValue({ _id: 'sender123', email: 'hello@example.com' })
+
+    const result = await manageSendingSetup.handler({ resource: 'sender_identity', action: 'set_default', senderIdentityId: 'sender123' })
+
+    expect(client.post).toHaveBeenCalledWith('/sender-identities/sender123/set-default')
+    expect(result.content[0].text).toBe('"hello@example.com" is now the default sender identity.')
   })
 })
 

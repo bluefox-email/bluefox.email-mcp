@@ -20,8 +20,9 @@ describe('create_contact', () => {
     expect(result.content[0].text).toBe('Created contact a@example.com.')
   })
 
-  test('creates a contact with name, tags, and custom fields', async () => {
+  test('creates a contact with name, tags, and custom fields, auto-registering the name field when missing', async () => {
     const { client, create_contact: createContact } = setup()
+    client.get.mockResolvedValue({ items: [{ name: 'plan', type: 'string' }] })
     client.post.mockResolvedValue({ email: 'a@example.com' })
 
     await createContact.handler({
@@ -31,12 +32,25 @@ describe('create_contact', () => {
       customFields: { plan: 'pro' }
     })
 
+    expect(client.get).toHaveBeenCalledWith('/contacts/fields')
+    expect(client.post).toHaveBeenCalledWith('/contacts/fields', { name: 'name', type: 'string' })
     expect(client.post).toHaveBeenCalledWith('/contacts', {
       email: 'a@example.com',
       plan: 'pro',
       name: 'Ada',
       tags: ['vip']
     })
+  })
+
+  test('does not re-register the name field when it already exists', async () => {
+    const { client, create_contact: createContact } = setup()
+    client.get.mockResolvedValue({ items: [{ name: 'name', type: 'string' }] })
+    client.post.mockResolvedValue({ email: 'a@example.com' })
+
+    await createContact.handler({ email: 'a@example.com', name: 'Ada' })
+
+    expect(client.post).not.toHaveBeenCalledWith('/contacts/fields', expect.anything())
+    expect(client.post).toHaveBeenCalledWith('/contacts', { email: 'a@example.com', name: 'Ada' })
   })
 })
 
@@ -64,6 +78,7 @@ describe('get_contact', () => {
 describe('update_contact', () => {
   test('updates email, name, tags, and custom fields', async () => {
     const { client, update_contact: updateContact } = setup()
+    client.get.mockResolvedValue({ items: [] })
     client.patch.mockResolvedValue({ email: 'b@example.com' })
 
     const result = await updateContact.handler({
@@ -74,6 +89,7 @@ describe('update_contact', () => {
       customFields: { plan: 'pro' }
     })
 
+    expect(client.post).toHaveBeenCalledWith('/contacts/fields', { name: 'name', type: 'string' })
     expect(client.patch).toHaveBeenCalledWith('/contacts/a%40example.com', {
       plan: 'pro',
       email: 'b@example.com',

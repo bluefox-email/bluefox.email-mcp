@@ -3,6 +3,16 @@ import { textResult } from '../helpers/errors.js'
 
 const customFieldsSchema = z.record(z.any()).optional().describe('Custom contact field values, keyed by field name (e.g. {"plan": "pro"}) - a name that is not already a registered custom field on this project is silently dropped, not an error.')
 
+// Contacts have no built-in "name" attribute - it only persists once a custom field literally called "name"
+// is registered (see manage_contact_fields_and_tags). Auto-register it on first use so this just works, instead
+// of silently no-op'ing like any other unregistered custom field would.
+async function ensureNameField (client) {
+  const fields = await client.get('/contacts/fields')
+  if (!fields.items.some(field => field.name === 'name')) {
+    await client.post('/contacts/fields', { name: 'name', type: 'string' })
+  }
+}
+
 export function createContactTools ({ client }) {
   return [
     {
@@ -12,7 +22,7 @@ export function createContactTools ({ client }) {
         description: 'Creates a new contact, independent of any subscriber list.',
         inputSchema: {
           email: z.string(),
-          name: z.string().optional(),
+          name: z.string().optional().describe('Stored as a custom field called "name", auto-registered the first time it\'s used.'),
           tags: z.array(z.string()).optional().describe('Tags are created automatically if they do not already exist.'),
           customFields: customFieldsSchema
         }
@@ -20,6 +30,7 @@ export function createContactTools ({ client }) {
       handler: async (args) => {
         const body = { email: args.email, ...(args.customFields || {}) }
         if (args.name) {
+          await ensureNameField(client)
           body.name = args.name
         }
         if (args.tags) {
@@ -53,7 +64,7 @@ export function createContactTools ({ client }) {
         inputSchema: {
           email: z.string().describe('The contact\'s current email, to find them by.'),
           newEmail: z.string().optional().describe('Set this to change the contact\'s email address.'),
-          name: z.string().optional(),
+          name: z.string().optional().describe('Stored as a custom field called "name", auto-registered the first time it\'s used.'),
           tags: z.array(z.string()).optional().describe('Replaces the contact\'s full tag list.'),
           customFields: customFieldsSchema
         }
@@ -64,6 +75,7 @@ export function createContactTools ({ client }) {
           body.email = args.newEmail
         }
         if (args.name) {
+          await ensureNameField(client)
           body.name = args.name
         }
         if (args.tags) {

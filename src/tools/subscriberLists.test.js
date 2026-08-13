@@ -200,14 +200,14 @@ describe('update_subscriber_list', () => {
 })
 
 describe('get_subscriber_list', () => {
-  test('lists every subscriber list when none is specified', async () => {
+  test('lists every subscriber list when none is specified, flagging private ones', async () => {
     const { client, get_subscriber_list: getSubscriberList } = setup()
-    client.get.mockResolvedValue({ count: 2, items: [{ name: 'Newsletter' }, { name: 'VIP' }] })
+    client.get.mockResolvedValue({ count: 2, items: [{ name: 'Newsletter' }, { name: 'VIP', private: true }] })
 
     const result = await getSubscriberList.handler({})
 
     expect(client.get).toHaveBeenCalledWith('/subscriber-lists', { limit: 30 })
-    expect(result.content[0].text).toBe('2 subscriber list(s): Newsletter, VIP.')
+    expect(result.content[0].text).toBe('2 subscriber list(s): Newsletter, VIP (private).')
   })
 
   test('reports when the project has no subscriber lists yet', async () => {
@@ -226,18 +226,32 @@ describe('get_subscriber_list', () => {
     expect(result.content[0].text).toBe('5 subscriber list(s): Newsletter (more not shown).')
   })
 
-  test('returns detail and stats for a single list found by id', async () => {
+  test('returns detail and stats for a single list found by id, including privacy and double opt-in status', async () => {
     const { client, get_subscriber_list: getSubscriberList } = setup()
     client.get.mockImplementation(async path => {
       if (path === '/subscriber-lists/list123') {
-        return { name: 'Newsletter', description: 'Weekly updates' }
+        return { name: 'Newsletter', description: 'Weekly updates', private: true, doubleOptIn: { active: true } }
       }
       return { active: 10, paused: 1, unsubscribed: 2, unverified: 3 }
     })
 
     const result = await getSubscriberList.handler({ subscriberListId: 'list123' })
 
-    expect(result.content[0].text).toBe('"Newsletter" - Weekly updates. 10 active, 1 paused, 2 unsubscribed, 3 unverified.')
+    expect(result.content[0].text).toBe('"Newsletter" - Weekly updates. Private. Double opt-in: on. 10 active, 1 paused, 2 unsubscribed, 3 unverified.')
+  })
+
+  test('reports public and double opt-in off by default', async () => {
+    const { client, get_subscriber_list: getSubscriberList } = setup()
+    client.get.mockImplementation(async path => {
+      if (path === '/subscriber-lists/list123') {
+        return { name: 'Newsletter', description: 'Weekly updates' }
+      }
+      return { active: 0, paused: 0, unsubscribed: 0, unverified: 0 }
+    })
+
+    const result = await getSubscriberList.handler({ subscriberListId: 'list123' })
+
+    expect(result.content[0].text).toContain('Public. Double opt-in: off.')
   })
 
   test('falls back to "no description" when the list has none', async () => {
