@@ -34,7 +34,7 @@ const styleSchema = {
   successFont: z.string().optional(),
   successFontColor: z.string().optional(),
   successFontSize: z.string().optional(),
-  redirectLink: z.string().optional().describe('Where to send visitors after a successful signup (when double opt-in doesn\'t apply).'),
+  redirectLink: z.string().optional().describe('The general post-signup redirect - where a visitor lands immediately after submitting the form (used when double opt-in is off, or is on but hasn\'t been confirmed yet). This is a DIFFERENT field from doubleOptInRedirectLink below - that one only fires later, after the contact clicks the confirmation link in their email. If the user just says "redirect people after they sign up" without mentioning confirmation/verification, they mean this field, not doubleOptInRedirectLink.'),
   termsAndConditionsShow: z.boolean().optional(),
   termsAndConditionsLabel: z.string().optional(),
   termsAndConditionsLinkLabel: z.string().optional(),
@@ -55,7 +55,7 @@ const doubleOptInSchema = {
   doubleOptInActive: z.boolean().optional().describe('The referenced transactional email\'s body MUST contain {{verifyLink}} - the API rejects enabling this otherwise, since that\'s the only way a contact can confirm.'),
   doubleOptInTransactionalEmailId: z.string().optional().describe('Its body must include {{verifyLink}}.'),
   doubleOptInTransactionalEmailName: z.string().optional().describe('The transactional email that sends the confirmation message, by name - looked up automatically. Required (id or name) if doubleOptInActive is true. Its body must include {{verifyLink}}.'),
-  doubleOptInRedirectLink: z.string().optional().describe('Where to send the contact after they confirm.'),
+  doubleOptInRedirectLink: z.string().optional().describe('Where to send the contact after they click the confirmation link in their email and their subscription becomes verified. Only relevant when double opt-in is active. This is a DIFFERENT field from the top-level redirectLink above - that one is the general post-signup redirect, used before/without confirmation. Setting this alone does NOT change where visitors land right after submitting the form.'),
   confirmationTitle: z.string().optional(),
   confirmationMessage: z.string().optional()
 }
