@@ -96,9 +96,9 @@ describe('get_aws_config', () => {
     expect(result.content[0].text).toContain('Support <support@example.com>')
   })
 
-  test('reports none/no config when nothing is set yet, and points to production access since the project is not BYO-AWS', async () => {
+  test('reports none/no config when nothing is set yet, and offers both production access and BYO-AWS since the project is unrestricted', async () => {
     const { client, get_aws_config: getAwsConfig } = setup()
-    client.get.mockResolvedValue({ name: 'Project', status: 'sandbox' })
+    client.get.mockResolvedValue({ name: 'Project', status: 'sandbox', restricted: false })
 
     const result = await getAwsConfig.handler({})
     const text = result.content[0].text
@@ -106,16 +106,41 @@ describe('get_aws_config', () => {
     expect(text).toContain('Access key: none')
     expect(text).toContain('Sender identities: none')
     expect(text).toContain('This project is not using BYO-AWS (status: sandbox)')
+    expect(text).toContain('two independent options')
     expect(text).toContain('get_production_access_status / apply_for_production_access')
+    expect(text).toContain('set_byo_aws_config')
   })
 
-  test('does not mention production access when the project is already byoAwsSes', async () => {
+  test('when the project is restricted, only offers BYO-AWS since production access would not lift the restriction', async () => {
     const { client, get_aws_config: getAwsConfig } = setup()
-    client.get.mockResolvedValue({ name: 'Project', status: 'byoAwsSes', awsConfig: { region: 'us-east-1' } })
+    client.get.mockResolvedValue({ name: 'Project', status: 'sandbox', restricted: true, restrictedReason: 'Restricted automatically due to high bounce/complaint rates' })
+
+    const result = await getAwsConfig.handler({})
+    const text = result.content[0].text
+
+    expect(text).toContain('This project is restricted (Restricted automatically due to high bounce/complaint rates)')
+    expect(text).toContain('production access would not lift this')
+    expect(text).toContain('set_byo_aws_config')
+    expect(text).not.toContain('get_production_access_status / apply_for_production_access')
+  })
+
+  test('falls back to a generic reason when restricted but no reason is given', async () => {
+    const { client, get_aws_config: getAwsConfig } = setup()
+    client.get.mockResolvedValue({ name: 'Project', status: 'sandbox', restricted: true })
+
+    const result = await getAwsConfig.handler({})
+
+    expect(result.content[0].text).toContain('This project is restricted (reason not given)')
+  })
+
+  test('does not mention production access or restriction when the project is already byoAwsSes', async () => {
+    const { client, get_aws_config: getAwsConfig } = setup()
+    client.get.mockResolvedValue({ name: 'Project', status: 'byoAwsSes', restricted: true, awsConfig: { region: 'us-east-1' } })
 
     const result = await getAwsConfig.handler({})
 
     expect(result.content[0].text).not.toContain('not using BYO-AWS')
+    expect(result.content[0].text).not.toContain('restricted')
   })
 })
 
@@ -130,15 +155,27 @@ describe('check_aws_credentials', () => {
     expect(result.content[0].text).toBe('AWS credentials check passed.')
   })
 
-  test('with no args and nothing stored, short-circuits with a clear explanation instead of a raw backend error', async () => {
+  test('with no args and nothing stored, short-circuits with both options instead of a raw backend error', async () => {
     const { client, check_aws_credentials: check } = setup()
-    client.get.mockResolvedValue({ status: 'sandbox' })
+    client.get.mockResolvedValue({ status: 'sandbox', restricted: false })
 
     const result = await check.handler({})
 
     expect(client.get).toHaveBeenCalledWith('')
     expect(client.post).not.toHaveBeenCalled()
-    expect(result.content[0].text).toBe('There\'s no AWS config stored to check - this project (status: sandbox) isn\'t set up for BYO-AWS. If that\'s intentional, use get_production_access_status instead to check its status on bluefox.email\'s shared infrastructure.')
+    expect(result.content[0].text).toBe(
+      'There\'s no AWS config stored to check. This project is not using BYO-AWS (status: sandbox) - it sends through bluefox.email\'s shared infrastructure, not its own AWS account. An empty config here is expected and is not something to set up by default. It has two independent options: use get_production_access_status / apply_for_production_access to check or raise its limits on the shared infrastructure, or use set_byo_aws_config to send through its own AWS account instead.'
+    )
+  })
+
+  test('with no args and nothing stored on a restricted project, short-circuits pointing only at BYO-AWS', async () => {
+    const { client, check_aws_credentials: check } = setup()
+    client.get.mockResolvedValue({ status: 'sandbox', restricted: true, restrictedReason: 'Restricted automatically due to high bounce/complaint rates' })
+
+    const result = await check.handler({})
+
+    expect(result.content[0].text).toContain('This project is restricted (Restricted automatically due to high bounce/complaint rates)')
+    expect(result.content[0].text).not.toContain('get_production_access_status / apply_for_production_access')
   })
 
   test('with no args but a stored role ARN, checks it against SES as normal', async () => {

@@ -4,15 +4,26 @@ import path from 'path'
 import { z } from 'zod'
 import { textResult } from '../helpers/errors.js'
 
+// Not using BYO-AWS is normal, not a gap to fill by default - but which alternative to point at depends on
+// whether the project is restricted. A restriction is on bluefox.email's shared sending infrastructure
+// specifically, so production access (still shared infrastructure) can't lift it - BYO-AWS is the only way
+// for a restricted project to resume sending. An unrestricted project genuinely has both options open.
+function formatNotByoAwsHint (project) {
+  if (project.status === 'byoAwsSes') {
+    return ''
+  }
+  if (project.restricted) {
+    return ` This project is restricted (${project.restrictedReason || 'reason not given'}) and cannot send through bluefox.email's shared infrastructure right now - production access would not lift this, since the restriction is on the shared infrastructure itself. The only way to resume sending is to switch to BYO-AWS with set_byo_aws_config.`
+  }
+  return ` This project is not using BYO-AWS (status: ${project.status}) - it sends through bluefox.email's shared infrastructure, not its own AWS account. An empty config here is expected and is not something to set up by default. It has two independent options: use get_production_access_status / apply_for_production_access to check or raise its limits on the shared infrastructure, or use set_byo_aws_config to send through its own AWS account instead.`
+}
+
 function formatAwsConfig (project) {
   const awsConfig = project.awsConfig || {}
   const identities = awsConfig.senderIdentities?.length
     ? awsConfig.senderIdentities.map(identity => `${identity.name} <${identity.email}>${identity.region ? ` (${identity.region})` : ''}`).join(', ')
     : 'none'
-  const notByoAws = project.status !== 'byoAwsSes'
-    ? ` This project is not using BYO-AWS (status: ${project.status}) - it sends through bluefox.email's shared infrastructure, not its own AWS account. An empty config here is expected and is not something to set up unless you specifically want your own AWS account involved. To check or raise this project's limits on the shared infrastructure instead, use get_production_access_status / apply_for_production_access.`
-    : ''
-  return `AWS config for "${project.name}" (status: ${project.status}). Access key: ${awsConfig.accessKeyIdHint || 'none'}. Secret key: ${awsConfig.secretAccessKeyHint || 'none'}. STS role: ${awsConfig.roleArnHint || 'none'}. Region: ${awsConfig.region || 'none'}. Limit: ${awsConfig.limit ?? 'none'} sends/sec. Sender identities: ${identities}.${notByoAws}`
+  return `AWS config for "${project.name}" (status: ${project.status}). Access key: ${awsConfig.accessKeyIdHint || 'none'}. Secret key: ${awsConfig.secretAccessKeyHint || 'none'}. STS role: ${awsConfig.roleArnHint || 'none'}. Region: ${awsConfig.region || 'none'}. Limit: ${awsConfig.limit ?? 'none'} sends/sec. Sender identities: ${identities}.${formatNotByoAwsHint(project)}`
 }
 
 export function createProjectSetupTools ({ client }) {
@@ -79,7 +90,7 @@ export function createProjectSetupTools ({ client }) {
         if (!hasOverride) {
           const project = await client.get('')
           if (!project.awsConfig?.roleArn && !project.awsConfig?.accessKeyId) {
-            return textResult(`There's no AWS config stored to check - this project (status: ${project.status}) isn't set up for BYO-AWS. If that's intentional, use get_production_access_status instead to check its status on bluefox.email's shared infrastructure.`)
+            return textResult(`There's no AWS config stored to check.${formatNotByoAwsHint(project)}`)
           }
         }
         await client.post('/aws-check', args)

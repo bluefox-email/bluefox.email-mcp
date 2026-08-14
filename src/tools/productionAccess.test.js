@@ -90,6 +90,29 @@ describe('get_production_access_status', () => {
     const result = await getStatus.handler({})
     expect(result.content[0].text).toContain('unknown date: requested 10000 (pending) - growing fast')
   })
+
+  test('notes when the project is restricted, since approval does not lift it', async () => {
+    const { client, get_production_access_status: getStatus } = setup()
+    client.get.mockResolvedValue({
+      requestStatus: 'approved',
+      domainStatus: 'verified',
+      monthlyLimit: 5000,
+      limitIncreases: [],
+      restricted: true,
+      restrictedReason: 'Restricted automatically due to high bounce/complaint rates'
+    })
+
+    const result = await getStatus.handler({})
+    expect(result.content[0].text).toContain('Restricted (Restricted automatically due to high bounce/complaint rates) - this blocks sending on the shared infrastructure regardless of production-access status')
+  })
+
+  test('falls back to a generic reason when restricted but no reason is given', async () => {
+    const { client, get_production_access_status: getStatus } = setup()
+    client.get.mockResolvedValue({ requestStatus: 'approved', domainStatus: 'verified', monthlyLimit: 5000, limitIncreases: [], restricted: true })
+
+    const result = await getStatus.handler({})
+    expect(result.content[0].text).toContain('Restricted (reason not given)')
+  })
 })
 
 describe('request_limit_increase', () => {

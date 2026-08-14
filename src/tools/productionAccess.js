@@ -54,7 +54,10 @@ export function createProductionAccessTools ({ client }) {
           `monthly limit: ${result.monthlyLimit}`,
           `sending rates: ${formatSendingRates(result.sendingRates)}`
         ]
-        return textResult(`${parts.join(', ')}.\nLimit increase history:\n${formatLimitIncreases(result.limitIncreases)}`)
+        const restrictedNote = result.restricted
+          ? `\nRestricted (${result.restrictedReason || 'reason not given'}) - this blocks sending on the shared infrastructure regardless of production-access status; switch to BYO-AWS with set_byo_aws_config to resume sending.`
+          : ''
+        return textResult(`${parts.join(', ')}.\nLimit increase history:\n${formatLimitIncreases(result.limitIncreases)}${restrictedNote}`)
       }
     },
     {
