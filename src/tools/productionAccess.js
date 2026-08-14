@@ -24,7 +24,7 @@ export function createProductionAccessTools ({ client }) {
       name: 'apply_for_production_access',
       config: {
         title: 'Apply for production access',
-        description: 'Submits a production access request for this project. Requires at least one domain with SPF, MX, and DKIM all verified first (add one with the sending-setup tools, then check_dns until it passes) - resubmitting after a decline only requires DKIM to still be verified.',
+        description: 'Submits a production access request for this project. This is the standard way for a project to move past sandbox limits while still sending through bluefox.email\'s shared infrastructure - no AWS account of its own required. (set_byo_aws_config is the separate, less common path for a project that wants to send through its own AWS account instead.) Requires at least one domain with SPF, MX, and DKIM all verified first (add one with the sending-setup tools, then check_dns until it passes) - resubmitting after a decline only requires DKIM to still be verified.',
         inputSchema: {
           volume: z.number().describe('Expected monthly sending volume.'),
           whyBluefox: z.string().describe('Why this project is using bluefox.email.'),

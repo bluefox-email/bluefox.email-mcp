@@ -18,7 +18,7 @@ export function createProjectSetupTools ({ client }) {
       name: 'set_byo_aws_config',
       config: {
         title: 'Set up bring-your-own AWS SES credentials',
-        description: 'Submits (or updates) this project\'s own AWS SES credentials - either an STS role ARN or a static access key/secret pair, never both. Setting status: "byoAwsSes" switches the project to send through these credentials instead of bluefox.email\'s shared sending infrastructure. Use check_aws_credentials to validate before relying on them.',
+        description: 'Submits (or updates) this project\'s own AWS SES credentials - either an STS role ARN or a static access key/secret pair, never both. Setting status: "byoAwsSes" switches the project to send through these credentials instead of bluefox.email\'s shared sending infrastructure. Use check_aws_credentials to validate before relying on them. This is only for projects that want to run their own AWS account - most projects should use apply_for_production_access instead to raise limits on bluefox.email\'s shared infrastructure without managing AWS themselves.',
         inputSchema: {
           roleArn: z.string().optional().describe('STS role ARN, from the CloudFormation setup - mutually exclusive with accessKeyId/secretAccessKey.'),
           accessKeyId: z.string().optional(),
@@ -49,7 +49,7 @@ export function createProjectSetupTools ({ client }) {
       name: 'get_aws_config',
       config: {
         title: 'Get the current BYO-AWS SES configuration',
-        description: 'Reads back this project\'s currently configured BYO-AWS region, sending limit, sender identities, and credential hints (the real secrets are never returned).',
+        description: 'Reads back this project\'s currently configured BYO-AWS region, sending limit, sender identities, and credential hints (the real secrets are never returned). Empty/unset is normal for a project that sends through bluefox.email\'s shared infrastructure instead - use get_production_access_status to check that project\'s status and limits.',
         inputSchema: {}
       },
       handler: async () => {
