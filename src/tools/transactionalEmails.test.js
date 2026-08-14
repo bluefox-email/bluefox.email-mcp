@@ -14,7 +14,7 @@ function setup () {
 describe('create_transactional_email', () => {
   test('creates a minimal transactional email with no sender identity', async () => {
     const { client, create_transactional_email: createTransactionalEmail } = setup()
-    client.post.mockResolvedValue({ _id: 'email123', name: 'Order Confirmation' })
+    client.post.mockResolvedValue({ _id: 'email123', name: 'Order Confirmation', subject: 'Your order' })
 
     const result = await createTransactionalEmail.handler({ name: 'Order Confirmation', subject: 'Your order', body: 'Thanks!' })
 
@@ -25,7 +25,8 @@ describe('create_transactional_email', () => {
       type: 'text',
       document: 'Thanks!'
     })
-    expect(result.content[0].text).toBe('Created transactional email "Order Confirmation" (id email123).')
+    expect(result.content[0].text).toContain('Created transactional email:')
+    expect(result.content[0].text).toContain('"Order Confirmation" (id email123)')
   })
 
   test('creates with previewText, replyTo, and a sender identity resolved by email', async () => {

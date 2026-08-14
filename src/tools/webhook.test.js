@@ -37,7 +37,7 @@ describe('manage_webhook', () => {
 
   test('set replaces the whole webhook configuration', async () => {
     const { client, manageWebhook } = setup()
-    client.patch.mockResolvedValue({ url: 'https://example.com/hook' })
+    client.patch.mockResolvedValue({ url: 'https://example.com/hook', bounce: true, complaint: true, click: false, open: false, sent: false, failed: false, subscription: false })
 
     const result = await manageWebhook.handler({
       action: 'set',
@@ -63,7 +63,7 @@ describe('manage_webhook', () => {
       failed: false,
       subscription: false
     })
-    expect(result.content[0].text).toBe('Webhook set to https://example.com/hook.')
+    expect(result.content[0].text).toBe('Set Webhook: https://example.com/hook - events: bounce, complaint.')
   })
 
   test('delete removes the webhook', async () => {

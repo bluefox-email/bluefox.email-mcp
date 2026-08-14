@@ -58,7 +58,8 @@ export function createContactTools ({ client }) {
         const customFieldsText = Object.keys(customFields).length
           ? ` - custom fields: ${Object.entries(customFields).map(([key, value]) => `${key}: ${value}`).join(', ')}`
           : ''
-        return textResult(`${result.email}${result.name ? ` (${result.name})` : ''} - tags: ${(result.tags || []).join(', ') || 'none'} - subscriber lists: ${lists}${customFieldsText}`)
+        const engagement = `last opened: ${result.lastOpenDate || 'never'}, last clicked: ${result.lastClickDate || 'never'}, last received: ${result.lastReceiveDate || 'never'}`
+        return textResult(`${result.email}${result.name ? ` (${result.name})` : ''} - tags: ${(result.tags || []).join(', ') || 'none'} - subscriber lists: ${lists}${customFieldsText} - ${engagement}`)
       }
     },
     {

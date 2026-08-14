@@ -30,44 +30,65 @@ describe('apply_for_production_access', () => {
 })
 
 describe('get_production_access_status', () => {
-  test('formats status with no request yet and no verified domain', async () => {
+  test('formats status with no request yet, no verified domain, no sending rates, and no limit increase history', async () => {
     const { client, get_production_access_status: getStatus } = setup()
-    client.get.mockResolvedValue({ requestStatus: 'none', domainStatus: 'none', verifiedDomain: '', monthlyLimit: 0, limitIncreases: [] })
+    client.get.mockResolvedValue({ requestStatus: 'none', domainStatus: 'none', verifiedDomain: '', monthlyLimit: 0, sendingRates: [], limitIncreases: [] })
 
     const result = await getStatus.handler({})
 
     expect(client.get).toHaveBeenCalledWith('/production-access')
-    expect(result.content[0].text).toBe('request: none, domain: none, monthly limit: 0.')
+    expect(result.content[0].text).toBe('request: none, domain: none, monthly limit: 0, sending rates: none configured.\nLimit increase history:\nnone requested yet')
   })
 
-  test('formats status with a verified domain and a pending limit increase', async () => {
+  test('formats status with a verified domain, sending rates, and a pending limit increase', async () => {
     const { client, get_production_access_status: getStatus } = setup()
     client.get.mockResolvedValue({
       requestStatus: 'approved',
       domainStatus: 'verified',
       verifiedDomain: 'example.com',
       monthlyLimit: 5000,
-      limitIncreases: [{ requestedLimit: 10000, status: 'pending' }]
+      sendingRates: [{ region: 'us-east-1', ratePerSecond: 14 }],
+      limitIncreases: [{ requestedLimit: 10000, reason: 'growing fast', status: 'pending', createdAt: '2026-01-01T00:00:00.000Z' }]
     })
 
     const result = await getStatus.handler({})
 
-    expect(result.content[0].text).toBe('request: approved, domain: verified (example.com), monthly limit: 5000, pending limit increase: 10000.')
+    expect(result.content[0].text).toContain('request: approved, domain: verified (example.com), monthly limit: 5000, sending rates: us-east-1: 14/s.')
+    expect(result.content[0].text).toContain('2026-01-01T00:00:00.000Z: requested 10000 (pending) - growing fast')
   })
 
-  test('does not mention a limit increase when none is pending', async () => {
+  test('shows multiple sending rates and the full limit increase history including approved/declined entries', async () => {
     const { client, get_production_access_status: getStatus } = setup()
     client.get.mockResolvedValue({
       requestStatus: 'approved',
       domainStatus: 'verified',
       verifiedDomain: 'example.com',
-      monthlyLimit: 5000,
-      limitIncreases: [{ requestedLimit: 10000, status: 'approved' }]
+      monthlyLimit: 20000,
+      sendingRates: [{ region: 'us-east-1', ratePerSecond: 14 }, { region: 'eu-west-1', ratePerSecond: 9 }],
+      limitIncreases: [
+        { requestedLimit: 10000, approvedLimit: 10000, reason: 'growing fast', status: 'approved', createdAt: '2026-01-01T00:00:00.000Z' },
+        { requestedLimit: 50000, reason: 'too much, too soon', status: 'declined', createdAt: '2026-02-01T00:00:00.000Z' }
+      ]
     })
 
     const result = await getStatus.handler({})
 
-    expect(result.content[0].text).toBe('request: approved, domain: verified (example.com), monthly limit: 5000.')
+    expect(result.content[0].text).toContain('sending rates: us-east-1: 14/s, eu-west-1: 9/s.')
+    expect(result.content[0].text).toContain('2026-01-01T00:00:00.000Z: requested 10000 (approved, approved limit 10000) - growing fast')
+    expect(result.content[0].text).toContain('2026-02-01T00:00:00.000Z: requested 50000 (declined) - too much, too soon')
+  })
+
+  test('falls back to "unknown date" when a limit increase entry has no createdAt', async () => {
+    const { client, get_production_access_status: getStatus } = setup()
+    client.get.mockResolvedValue({
+      requestStatus: 'approved',
+      domainStatus: 'verified',
+      monthlyLimit: 5000,
+      limitIncreases: [{ requestedLimit: 10000, reason: 'growing fast', status: 'pending' }]
+    })
+
+    const result = await getStatus.handler({})
+    expect(result.content[0].text).toContain('unknown date: requested 10000 (pending) - growing fast')
   })
 })
 

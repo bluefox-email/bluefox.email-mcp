@@ -1,6 +1,92 @@
 import { z } from 'zod'
 import { textResult } from '../helpers/errors.js'
 
+const signupFormStyleFields = [
+  'formLayout', 'showCaptcha', 'emailPlaceholder', 'captchaPlaceholder', 'formFontStyle', 'formFontColor',
+  'formFontSize', 'btnLabel', 'btnFont', 'btnFontColor', 'btnColor', 'btnFontSize', 'successMessage',
+  'successFont', 'successFontColor', 'successFontSize'
+]
+
+const signupFormSchema = {
+  formLayout: z.string().optional().describe('This list\'s own join form only (not a separate signup_forms resource).'),
+  showCaptcha: z.boolean().optional().describe('Defaults to true.'),
+  emailPlaceholder: z.string().optional(),
+  captchaPlaceholder: z.string().optional(),
+  formFontStyle: z.string().optional(),
+  formFontColor: z.string().optional(),
+  formFontSize: z.string().optional(),
+  btnLabel: z.string().optional(),
+  btnFont: z.string().optional(),
+  btnFontColor: z.string().optional(),
+  btnColor: z.string().optional(),
+  btnFontSize: z.string().optional(),
+  successMessage: z.string().optional(),
+  successFont: z.string().optional(),
+  successFontColor: z.string().optional(),
+  successFontSize: z.string().optional(),
+  contactFields: z.array(z.object({
+    name: z.string().describe('The custom contact field\'s name - use manage_contact_fields_and_tags (action: list) to see what exists on the project.'),
+    show: z.boolean().optional().describe('Whether this field appears on the form. Defaults to false (hidden) the first time a field is configured.'),
+    required: z.boolean().optional(),
+    placeholder: z.string().optional(),
+    order: z.number().optional().describe('Display position relative to other visible fields - lower shows first.')
+  })).optional().describe('Per-field show/hide, required, placeholder, and order for the project\'s custom contact fields on this list\'s own join form. Only the fields listed here are changed - any other field\'s existing settings are left as-is.')
+}
+
+function wantsSignupFormChange (args) {
+  return signupFormStyleFields.some(field => args[field] !== undefined) || args.contactFields?.length > 0
+}
+
+// signupForm is a nested object the API replaces wholesale when given, not deep-merged - the caller passes in
+// the already-fetched current signupForm (or undefined on create, where there's nothing to preserve yet).
+function buildSignupFormBody (args, current = {}) {
+  const signupForm = { ...current }
+  for (const field of signupFormStyleFields) {
+    if (args[field] !== undefined) {
+      signupForm[field] = args[field]
+    }
+  }
+  if (args.contactFields?.length) {
+    const propertiesStyle = { ...current.propertiesStyle }
+    for (const field of args.contactFields) {
+      propertiesStyle[field.name] = {
+        ...propertiesStyle[field.name],
+        ...(field.show !== undefined && { show: field.show }),
+        ...(field.required !== undefined && { required: field.required }),
+        ...(field.placeholder !== undefined && { placeholder: field.placeholder }),
+        ...(field.order !== undefined && { order: field.order })
+      }
+    }
+    signupForm.propertiesStyle = propertiesStyle
+  }
+  return signupForm
+}
+
+function formatSubscriberListDetail (detail, stats) {
+  const lines = [
+    `"${detail.name}" - ${detail.description || 'no description'}. ${detail.private ? 'Private' : 'Public'}.`
+  ]
+  if (detail.doubleOptIn?.active) {
+    lines.push(
+      `Double opt-in: ON - confirmation email id ${detail.doubleOptIn.emailId || '(none set)'}. ` +
+      `Redirect after confirming: ${detail.doubleOptIn.redirectLink || '(none)'}. ` +
+      `Confirmation title: "${detail.doubleOptIn.confirmationTitle}". Confirmation message: "${detail.doubleOptIn.confirmationMessage}".`
+    )
+  } else {
+    lines.push('Double opt-in: OFF.')
+  }
+  const signupForm = detail.signupForm || {}
+  lines.push(
+    `Join form: layout ${signupForm.formLayout}, captcha ${signupForm.showCaptcha === false ? 'off' : 'on'}, ` +
+    `button "${signupForm.btnLabel}" (${signupForm.btnFontColor} on ${signupForm.btnColor}), ` +
+    `success message: "${signupForm.successMessage}".`
+  )
+  const customFieldCount = signupForm.propertiesStyle ? Object.keys(signupForm.propertiesStyle).length : 0
+  lines.push(`Custom contact field settings (propertiesStyle): ${customFieldCount ? JSON.stringify(signupForm.propertiesStyle) : 'none configured'}`)
+  lines.push(`Stats: ${stats.active} active, ${stats.paused} paused, ${stats.unsubscribed} unsubscribed, ${stats.unverified} unverified.`)
+  return lines.join('\n')
+}
+
 export function createSubscriberListTools ({ client, resolveIdOptional, resolveIdOrRequired }) {
   return [
     {
@@ -17,7 +103,8 @@ export function createSubscriberListTools ({ client, resolveIdOptional, resolveI
           doubleOptInTransactionalEmailName: z.string().optional().describe('The transactional email that sends the confirmation message, by name - looked up automatically. Required if doubleOptInActive is true and the id is not already known. Its body must include {{verifyLink}}.'),
           doubleOptInRedirectLink: z.string().optional().describe('Where to send the contact after they confirm.'),
           confirmationTitle: z.string().optional(),
-          confirmationMessage: z.string().optional()
+          confirmationMessage: z.string().optional(),
+          ...signupFormSchema
         }
       },
       handler: async (args) => {
@@ -46,6 +133,10 @@ export function createSubscriberListTools ({ client, resolveIdOptional, resolveI
           }
         }
 
+        if (wantsSignupFormChange(args)) {
+          body.signupForm = buildSignupFormBody(args)
+        }
+
         const result = await client.post('/subscriber-lists', body)
         return textResult(`Created subscriber list "${result.name}" (id ${result._id}).`)
       }
@@ -66,7 +157,8 @@ export function createSubscriberListTools ({ client, resolveIdOptional, resolveI
           doubleOptInTransactionalEmailName: z.string().optional().describe('Looked up automatically. Its body must include {{verifyLink}}.'),
           doubleOptInRedirectLink: z.string().optional(),
           confirmationTitle: z.string().optional(),
-          confirmationMessage: z.string().optional()
+          confirmationMessage: z.string().optional(),
+          ...signupFormSchema
         }
       },
       handler: async (args) => {
@@ -95,10 +187,16 @@ export function createSubscriberListTools ({ client, resolveIdOptional, resolveI
           args.doubleOptInRedirectLink ||
           args.confirmationTitle ||
           args.confirmationMessage
+        const signupFormChange = wantsSignupFormChange(args)
+
+        // doubleOptIn/signupForm are nested objects the API replaces wholesale when given, not deep-merged -
+        // fetch the current list first so fields the caller didn't mention aren't silently wiped out.
+        let current
+        if (wantsDoubleOptInChange || signupFormChange) {
+          current = await client.get(`/subscriber-lists/${id}`)
+        }
+
         if (wantsDoubleOptInChange) {
-          // doubleOptIn is a nested object the API replaces wholesale when given, not deep-merged - fetch the
-          // current one first so fields the caller didn't mention aren't silently wiped out.
-          const current = await client.get(`/subscriber-lists/${id}`)
           const emailId = await resolveIdOptional({
             id: args.doubleOptInTransactionalEmailId,
             name: args.doubleOptInTransactionalEmailName,
@@ -114,6 +212,10 @@ export function createSubscriberListTools ({ client, resolveIdOptional, resolveI
             confirmationTitle: args.confirmationTitle || current.doubleOptIn?.confirmationTitle,
             confirmationMessage: args.confirmationMessage || current.doubleOptIn?.confirmationMessage
           }
+        }
+
+        if (signupFormChange) {
+          body.signupForm = buildSignupFormBody(args, current.signupForm)
         }
 
         const result = await client.patch(`/subscriber-lists/${id}`, body)
@@ -151,11 +253,7 @@ export function createSubscriberListTools ({ client, resolveIdOptional, resolveI
           client.get(`/subscriber-lists/${id}`),
           client.get(`/subscriber-lists/${id}/stats`)
         ])
-        return textResult(
-          `"${detail.name}" - ${detail.description || 'no description'}. ${detail.private ? 'Private' : 'Public'}. ` +
-          `Double opt-in: ${detail.doubleOptIn?.active ? 'on' : 'off'}. ` +
-          `${stats.active} active, ${stats.paused} paused, ${stats.unsubscribed} unsubscribed, ${stats.unverified} unverified.`
-        )
+        return textResult(formatSubscriberListDetail(detail, stats))
       }
     },
     {

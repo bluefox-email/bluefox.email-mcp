@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { textResult } from '../helpers/errors.js'
 import { feedsSchema } from './feedsSchema.js'
+import { formatEmailDetail } from './emailLifecycle.js'
 
 export function createTransactionalEmailTools ({ client, resolveIdOrRequired, resolveIdOptional }) {
   return [
@@ -50,7 +51,7 @@ export function createTransactionalEmailTools ({ client, resolveIdOrRequired, re
         }
 
         const result = await client.post('/transactional-emails', body)
-        return textResult(`Created transactional email "${result.name}" (id ${result._id}).`)
+        return textResult(`Created transactional email:\n${formatEmailDetail('transactional', result)}`)
       }
     },
     {

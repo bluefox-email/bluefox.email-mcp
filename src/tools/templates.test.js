@@ -35,31 +35,31 @@ describe('manage_templates', () => {
     expect(result.content[0].text).toBe('1 template(s): Welcome.')
   })
 
-  test('get resolves by name and summarizes with previewText and tags', async () => {
+  test('get resolves by name and summarizes with previewText, tags, and onProjectCreation', async () => {
     const { client, manageTemplates } = setup()
     client.get.mockImplementation(async path => {
       if (path === '/templates') {
         return { items: [{ _id: 'tmpl123' }] }
       }
-      return { name: 'Welcome', subject: 'Hi!', previewText: 'Glad you joined', tags: ['onboarding'] }
+      return { _id: 'tmpl123', name: 'Welcome', subject: 'Hi!', previewText: 'Glad you joined', tags: ['onboarding'], onProjectCreation: 'set-as-transactional' }
     })
 
     const result = await manageTemplates.handler({ action: 'get', templateName: 'Welcome' })
-    expect(result.content[0].text).toBe('"Welcome" - subject: "Hi!", preview: "Glad you joined". Tags: onboarding.')
+    expect(result.content[0].text).toBe('"Welcome" (id tmpl123) - subject: "Hi!", preview: "Glad you joined". Tags: onboarding. On new project creation: set-as-transactional.')
   })
 
-  test('get reports no previewText or tags gracefully', async () => {
+  test('get reports no previewText, tags, or onProjectCreation gracefully', async () => {
     const { client, manageTemplates } = setup()
-    client.get.mockResolvedValue({ name: 'Welcome', subject: 'Hi!' })
+    client.get.mockResolvedValue({ _id: 'tmpl123', name: 'Welcome', subject: 'Hi!' })
 
     const result = await manageTemplates.handler({ action: 'get', templateId: 'tmpl123' })
-    expect(result.content[0].text).toBe('"Welcome" - subject: "Hi!". Tags: none.')
+    expect(result.content[0].text).toBe('"Welcome" (id tmpl123) - subject: "Hi!". Tags: none. On new project creation: do-nothing.')
   })
 
   test('create duplicates a source template resolved by id, overriding every metadata field', async () => {
     const { client, manageTemplates } = setup()
     client.get.mockResolvedValue({ name: 'Welcome', subject: 'Old subject', previewText: 'Old preview', document: { blocks: ['a'] }, tags: ['old'], onProjectCreation: 'do-nothing' })
-    client.post.mockResolvedValue({ _id: 'tmpl456', name: 'Welcome v2' })
+    client.post.mockResolvedValue({ _id: 'tmpl456', name: 'Welcome v2', subject: 'New subject', previewText: 'New preview', tags: ['new'], onProjectCreation: 'set-as-transactional' })
 
     const result = await manageTemplates.handler({
       action: 'create',
@@ -80,7 +80,8 @@ describe('manage_templates', () => {
       previewText: 'New preview',
       onProjectCreation: 'set-as-transactional'
     })
-    expect(result.content[0].text).toBe('Created template "Welcome v2" (id tmpl456) from a copy of "Welcome".')
+    expect(result.content[0].text).toContain('Created template (from a copy of "Welcome"):')
+    expect(result.content[0].text).toContain('"Welcome v2" (id tmpl456)')
   })
 
   test('create resolves the source template by name and defaults metadata to the source\'s own values', async () => {
@@ -105,9 +106,9 @@ describe('manage_templates', () => {
     })
   })
 
-  test('update sends only the given metadata fields', async () => {
+  test('update sends only the given metadata fields and returns the resulting detail', async () => {
     const { client, manageTemplates } = setup()
-    client.patch.mockResolvedValue({ name: 'Welcome v2' })
+    client.patch.mockResolvedValue({ _id: 'tmpl123', name: 'Welcome v2', subject: 'New subject', previewText: 'New preview', tags: ['onboarding', 'v2'], onProjectCreation: 'set-as-triggered' })
 
     const result = await manageTemplates.handler({
       action: 'update',
@@ -126,7 +127,8 @@ describe('manage_templates', () => {
       tags: ['onboarding', 'v2'],
       onProjectCreation: 'set-as-triggered'
     })
-    expect(result.content[0].text).toBe('Updated template "Welcome v2".')
+    expect(result.content[0].text).toContain('Updated template:')
+    expect(result.content[0].text).toContain('On new project creation: set-as-triggered.')
   })
 
   test('update with no fields given sends an empty patch', async () => {

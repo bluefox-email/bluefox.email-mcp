@@ -55,14 +55,14 @@ describe('create_contact', () => {
 })
 
 describe('get_contact', () => {
-  test('formats a contact with lists and tags', async () => {
+  test('formats a contact with lists and tags, reporting never for unset engagement dates', async () => {
     const { client, get_contact: getContact } = setup()
     client.get.mockResolvedValue({ email: 'a@example.com', name: 'Ada', tags: ['vip'], _lists: ['Newsletter'] })
 
     const result = await getContact.handler({ email: 'a@example.com' })
 
     expect(client.get).toHaveBeenCalledWith('/contacts/a%40example.com')
-    expect(result.content[0].text).toBe('a@example.com (Ada) - tags: vip - subscriber lists: Newsletter')
+    expect(result.content[0].text).toBe('a@example.com (Ada) - tags: vip - subscriber lists: Newsletter - last opened: never, last clicked: never, last received: never')
   })
 
   test('includes custom field values, excluding built-in fields', async () => {
@@ -81,7 +81,21 @@ describe('get_contact', () => {
 
     const result = await getContact.handler({ email: 'a@example.com' })
 
-    expect(result.content[0].text).toBe('a@example.com (Ada) - tags: none - subscriber lists: none - custom fields: plan: pro, age: 32')
+    expect(result.content[0].text).toBe('a@example.com (Ada) - tags: none - subscriber lists: none - custom fields: plan: pro, age: 32 - last opened: never, last clicked: never, last received: never')
+  })
+
+  test('reports actual engagement dates when present', async () => {
+    const { client, get_contact: getContact } = setup()
+    client.get.mockResolvedValue({
+      email: 'a@example.com',
+      lastOpenDate: '2026-01-05T00:00:00.000Z',
+      lastClickDate: '2026-01-06T00:00:00.000Z',
+      lastReceiveDate: '2026-01-07T00:00:00.000Z'
+    })
+
+    const result = await getContact.handler({ email: 'a@example.com' })
+
+    expect(result.content[0].text).toContain('last opened: 2026-01-05T00:00:00.000Z, last clicked: 2026-01-06T00:00:00.000Z, last received: 2026-01-07T00:00:00.000Z')
   })
 
   test('formats a contact with no name, tags, or lists', async () => {
@@ -90,7 +104,7 @@ describe('get_contact', () => {
 
     const result = await getContact.handler({ email: 'a@example.com' })
 
-    expect(result.content[0].text).toBe('a@example.com - tags: none - subscriber lists: none')
+    expect(result.content[0].text).toBe('a@example.com - tags: none - subscriber lists: none - last opened: never, last clicked: never, last received: never')
   })
 })
 

@@ -1,6 +1,10 @@
 import { z } from 'zod'
 import { textResult } from '../helpers/errors.js'
 
+function formatTemplateDetail (template) {
+  return `"${template.name}" (id ${template._id}) - subject: "${template.subject}"${template.previewText ? `, preview: "${template.previewText}"` : ''}. Tags: ${(template.tags || []).join(', ') || 'none'}. On new project creation: ${template.onProjectCreation || 'do-nothing'}.`
+}
+
 export function createTemplateTools ({ client, resolveIdOrRequired }) {
   return [
     {
@@ -50,7 +54,7 @@ export function createTemplateTools ({ client, resolveIdOrRequired }) {
             onProjectCreation: args.onProjectCreation || source.onProjectCreation
           }
           const result = await client.post('/templates', body)
-          return textResult(`Created template "${result.name}" (id ${result._id}) from a copy of "${source.name}".`)
+          return textResult(`Created template (from a copy of "${source.name}"):\n${formatTemplateDetail(result)}`)
         }
 
         const id = await resolveIdOrRequired({
@@ -63,7 +67,7 @@ export function createTemplateTools ({ client, resolveIdOrRequired }) {
 
         if (args.action === 'get') {
           const template = await client.get(`/templates/${id}`)
-          return textResult(`"${template.name}" - subject: "${template.subject}"${template.previewText ? `, preview: "${template.previewText}"` : ''}. Tags: ${(template.tags || []).join(', ') || 'none'}.`)
+          return textResult(formatTemplateDetail(template))
         }
 
         if (args.action === 'update') {
@@ -84,7 +88,7 @@ export function createTemplateTools ({ client, resolveIdOrRequired }) {
             body.onProjectCreation = args.onProjectCreation
           }
           const result = await client.patch(`/templates/${id}`, body)
-          return textResult(`Updated template "${result.name}".`)
+          return textResult(`Updated template:\n${formatTemplateDetail(result)}`)
         }
 
         await client.del(`/templates/${id}`)

@@ -14,7 +14,7 @@ function setup () {
 describe('create_triggered_email', () => {
   test('creates a minimal triggered email using a subscriberListId directly', async () => {
     const { client, create_triggered_email: createTriggeredEmail } = setup()
-    client.post.mockResolvedValue({ _id: 'trig123', name: 'Welcome Email' })
+    client.post.mockResolvedValue({ _id: 'trig123', name: 'Welcome Email', subject: 'Welcome!', subscriberListId: 'list123' })
 
     const result = await createTriggeredEmail.handler({
       name: 'Welcome Email',
@@ -31,7 +31,9 @@ describe('create_triggered_email', () => {
       type: 'text',
       document: 'Hi there'
     })
-    expect(result.content[0].text).toBe('Created triggered email "Welcome Email" (id trig123).')
+    expect(result.content[0].text).toContain('Created triggered email:')
+    expect(result.content[0].text).toContain('"Welcome Email" (id trig123)')
+    expect(result.content[0].text).toContain('Subscriber list id: list123')
   })
 
   test('creates with previewText, replyTo, excludeUnengaged, and resolves list/sender by name', async () => {

@@ -1,6 +1,15 @@
 import { z } from 'zod'
 import { textResult } from '../helpers/errors.js'
 import { groupsSchema } from './segmentGroupsSchema.js'
+import { formatCondition } from './segments.js'
+
+function formatUnengagedSegment (unengagedContactSegment) {
+  const groups = unengagedContactSegment?.groups
+  if (!groups?.length) {
+    return 'not configured'
+  }
+  return groups.map((group, index) => `Group ${index + 1} (OR): ${group.conditions.map(formatCondition).join(' AND ') || '(no conditions - matches everyone)'}`).join('; ')
+}
 
 export function createProjectSettingsTools ({ client }) {
   return [
@@ -23,7 +32,12 @@ export function createProjectSettingsTools ({ client }) {
         if (args.action === 'get') {
           const project = await client.get('')
           const autoRemove = project.autoRemoveFromList || {}
-          return textResult(`Project "${project.name}" - status: ${project.status}, logoUrl: ${project.logoUrl || 'none'}, auto-remove on bounce: ${autoRemove.bounce || 'removeFromLists'}, auto-remove on complaint: ${autoRemove.complaint || 'removeFromLists'}, domain whitelist: ${project.whiteList?.length ? project.whiteList.join(', ') : 'none'}.`)
+          return textResult(
+            `Project "${project.name}" - status: ${project.status}, logoUrl: ${project.logoUrl || 'none'}, ` +
+            `auto-remove on bounce: ${autoRemove.bounce || 'removeFromLists'}, auto-remove on complaint: ${autoRemove.complaint || 'removeFromLists'}, ` +
+            `domain whitelist: ${project.whiteList?.length ? project.whiteList.join(', ') : 'none'}.\n` +
+            `Unengaged contact segment: ${formatUnengagedSegment(project.unengagedContactSegment)}`
+          )
         }
 
         const body = {}
@@ -50,7 +64,13 @@ export function createProjectSettingsTools ({ client }) {
         }
 
         const result = await client.patch('', body)
-        return textResult(`Updated project settings - name is now "${result.name}".`)
+        const autoRemove = result.autoRemoveFromList || {}
+        return textResult(
+          `Updated project "${result.name}" - status: ${result.status}, logoUrl: ${result.logoUrl || 'none'}, ` +
+          `auto-remove on bounce: ${autoRemove.bounce || 'removeFromLists'}, auto-remove on complaint: ${autoRemove.complaint || 'removeFromLists'}, ` +
+          `domain whitelist: ${result.whiteList?.length ? result.whiteList.join(', ') : 'none'}.\n` +
+          `Unengaged contact segment: ${formatUnengagedSegment(result.unengagedContactSegment)}`
+        )
       }
     }
   ]

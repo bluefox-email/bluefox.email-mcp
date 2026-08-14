@@ -23,7 +23,7 @@ describe('update_email', () => {
       }
       return { items: [{ _id: 'sender123' }] }
     })
-    client.patch.mockResolvedValue({ name: 'Summer Sale v2' })
+    client.patch.mockResolvedValue({ _id: 'campaign123', name: 'Summer Sale v2', subject: 'New subject', status: 'scheduled', scheduledTo: '2026-08-01T08:00:00.000Z', timeZone: 'America/New_York' })
 
     const result = await updateEmail.handler({
       type: 'campaign',
@@ -40,7 +40,8 @@ describe('update_email', () => {
       subscriberListName: 'Newsletter',
       segmentName: 'VIP',
       status: 'scheduled',
-      scheduledFor: '2026-08-01T08:00:00.000Z'
+      scheduledFor: '2026-08-01T08:00:00.000Z',
+      timeZone: 'America/New_York'
     })
 
     expect(client.patch).toHaveBeenCalledWith('/campaigns/campaign123', {
@@ -56,9 +57,21 @@ describe('update_email', () => {
       subscriberListId: 'list123',
       segmentId: 'seg123',
       status: 'scheduled',
-      scheduledTo: '2026-08-01T08:00:00.000Z'
+      scheduledTo: '2026-08-01T08:00:00.000Z',
+      timeZone: 'America/New_York'
     })
-    expect(result.content[0].text).toBe('Updated campaign "Summer Sale v2".')
+    expect(result.content[0].text).toContain('Updated campaign:')
+    expect(result.content[0].text).toContain('"Summer Sale v2" (id campaign123)')
+    expect(result.content[0].text).toContain('scheduled for 2026-08-01T08:00:00.000Z (time zone: America/New_York)')
+  })
+
+  test('does not send excludeUnengaged for a transactional email even if given', async () => {
+    const { client, update_email: updateEmail } = setup()
+    client.patch.mockResolvedValue({ name: 'Order Confirmation' })
+
+    await updateEmail.handler({ type: 'transactional', emailId: 'email123', excludeUnengaged: true })
+
+    expect(client.patch).toHaveBeenCalledWith('/transactional-emails/email123', {})
   })
 
   test('resolves a campaign by name when no id is given', async () => {
@@ -135,20 +148,85 @@ describe('get_email', () => {
     expect(result.content[0].text).toBe('5 transactional email(s): Order Confirmation (more not shown).')
   })
 
-  test('returns detail and stats for a single email found by id', async () => {
+  test('returns full detail and stats for a single campaign found by id', async () => {
     const { client, get_email: getEmail } = setup()
     client.get.mockImplementation(async path => {
       if (path === '/campaigns/campaign123') {
-        return { name: 'Summer Sale', subject: 'Big discounts' }
+        return {
+          _id: 'campaign123',
+          name: 'Summer Sale',
+          subject: 'Big discounts',
+          previewText: 'Save big',
+          status: 'scheduled',
+          scheduledTo: '2026-08-01T08:00:00.000Z',
+          timeZone: 'UTC',
+          subscriberListId: 'list123',
+          segmentId: 'seg123',
+          senderIdentity: 'sender123',
+          replyTo: 'support@example.com',
+          type: 'html',
+          excludeUnengaged: true,
+          feeds: [{ url: 'https://example.com/feed.xml', variableName: 'news' }]
+        }
       }
-      return { sent: 100, opens: 40, uniqueOpens: 35, clicks: 10, uniqueClicks: 8, bounce: 2, complaint: 0 }
+      return { sent: 100, failed: 3, opens: 40, uniqueOpens: 35, clicks: 10, uniqueClicks: 8, bounce: 2, complaint: 0 }
     })
 
     const result = await getEmail.handler({ type: 'campaign', emailId: 'campaign123' })
+    const text = result.content[0].text
 
-    expect(result.content[0].text).toBe(
-      '"Summer Sale" - subject: "Big discounts". 100 sent, 40 opens (35 unique), 10 clicks (8 unique), 2 bounced, 0 complaints.'
-    )
+    expect(text).toContain('"Summer Sale" (id campaign123)')
+    expect(text).toContain('Preview text: "Save big"')
+    expect(text).toContain('Content type: html')
+    expect(text).toContain('Status: scheduled, scheduled for 2026-08-01T08:00:00.000Z (time zone: UTC)')
+    expect(text).toContain('Subscriber list id: list123')
+    expect(text).toContain('Segment id: seg123')
+    expect(text).toContain('Sender identity id: sender123')
+    expect(text).toContain('Reply-to: support@example.com')
+    expect(text).toContain('Exclude unengaged: yes')
+    expect(text).toContain('Feeds: news')
+    expect(text).toContain('Stats: 100 sent, 3 failed, 40 opens (35 unique), 10 clicks (8 unique), 2 bounced, 0 complaints.')
+  })
+
+  test('defaults the time zone to UTC when scheduled without one, and falls back to the feed url when unnamed', async () => {
+    const { client, get_email: getEmail } = setup()
+    client.get.mockImplementation(async path => {
+      if (path === '/campaigns/campaign123') {
+        return {
+          _id: 'campaign123',
+          name: 'Summer Sale',
+          subject: 'Big discounts',
+          status: 'scheduled',
+          scheduledTo: '2026-08-01T08:00:00.000Z',
+          feeds: [{ url: 'https://example.com/feed.xml' }]
+        }
+      }
+      return { sent: 0, opens: 0, uniqueOpens: 0, clicks: 0, uniqueClicks: 0, bounce: 0, complaint: 0 }
+    })
+
+    const result = await getEmail.handler({ type: 'campaign', emailId: 'campaign123' })
+    const text = result.content[0].text
+
+    expect(text).toContain('(time zone: UTC)')
+    expect(text).toContain('Feeds: https://example.com/feed.xml')
+  })
+
+  test('returns minimal detail for a transactional email with no optional fields set', async () => {
+    const { client, get_email: getEmail } = setup()
+    client.get.mockImplementation(async path => {
+      if (path === '/transactional-emails/email123') {
+        return { _id: 'email123', name: 'Order Confirmation', subject: 'Your order' }
+      }
+      return { sent: 0, opens: 0, uniqueOpens: 0, clicks: 0, uniqueClicks: 0, bounce: 0, complaint: 0 }
+    })
+
+    const result = await getEmail.handler({ type: 'transactional', emailId: 'email123' })
+    const text = result.content[0].text
+
+    expect(text).toContain('Content type: chamaileon (visual editor)')
+    expect(text).not.toContain('Exclude unengaged')
+    expect(text).not.toContain('Status:')
+    expect(text).toContain('Stats: 0 sent, 0 failed')
   })
 
   test('resolves by name when getting a single email', async () => {
@@ -196,6 +274,34 @@ describe('get_email_recipients', () => {
       'a@example.com - sent, 2 opens, 1 clicks (unsubscribed)\n' +
       'b@example.com - failed, 0 opens, 0 clicks'
     )
+  })
+
+  test('includes sentAt and errors (string or object) when present', async () => {
+    const { client, get_email_recipients: getEmailRecipients } = setup()
+    client.get.mockResolvedValue({
+      count: 2,
+      items: [
+        { email: 'a@example.com', status: 'failed', sentAt: '2026-08-01T10:00:00.000Z', opens: 0, clicks: 0, errors: ['SES rejected'] },
+        { email: 'b@example.com', status: 'failed', opens: 0, clicks: 0, errors: [{ message: 'Timeout' }] }
+      ]
+    })
+
+    const result = await getEmailRecipients.handler({ type: 'campaign', emailId: 'campaign123' })
+    const text = result.content[0].text
+
+    expect(text).toContain('a@example.com - failed at 2026-08-01T10:00:00.000Z, 0 opens, 0 clicks - errors: SES rejected')
+    expect(text).toContain('b@example.com - failed, 0 opens, 0 clicks - errors: Timeout')
+  })
+
+  test('stringifies an error object with no message property', async () => {
+    const { client, get_email_recipients: getEmailRecipients } = setup()
+    client.get.mockResolvedValue({
+      count: 1,
+      items: [{ email: 'a@example.com', status: 'failed', opens: 0, clicks: 0, errors: [{ code: 'ETIMEDOUT' }] }]
+    })
+
+    const result = await getEmailRecipients.handler({ type: 'campaign', emailId: 'campaign123' })
+    expect(result.content[0].text).toContain('errors: {"code":"ETIMEDOUT"}')
   })
 
   test('omits the "more" note when every matching recipient was shown', async () => {
@@ -303,21 +409,21 @@ describe('list_email_error_log', () => {
     expect(result.content[0].text).toBe('No errors logged.')
   })
 
-  test('formats processing and delivery errors with the unseen count', async () => {
+  test('formats processing and delivery errors with the unseen count and timestamp', async () => {
     const { client, list_email_error_log: listErrors } = setup()
     client.get.mockResolvedValue({
       count: 2,
       unseenCount: 1,
       items: [
-        { source: 'processing', recipient: null, errorName: 'TemplateError', errorMessage: 'bad merge tag' },
-        { source: 'delivery', recipient: 'a@example.com', errorName: 'Delivery Failure', errorMessage: 'SES: rejected' }
+        { createdAt: '2026-08-01T10:00:00.000Z', source: 'processing', recipient: null, errorName: 'TemplateError', errorMessage: 'bad merge tag' },
+        { createdAt: '2026-08-01T11:00:00.000Z', source: 'delivery', recipient: 'a@example.com', errorName: 'Delivery Failure', errorMessage: 'SES: rejected' }
       ]
     })
 
     const result = await listErrors.handler({ type: 'campaign', emailId: 'camp123' })
 
     expect(result.content[0].text).toContain('2 error(s), 1 unseen:')
-    expect(result.content[0].text).toContain('[processing] TemplateError: bad merge tag')
-    expect(result.content[0].text).toContain('[delivery] a@example.com Delivery Failure: SES: rejected')
+    expect(result.content[0].text).toContain('2026-08-01T10:00:00.000Z [processing] TemplateError: bad merge tag')
+    expect(result.content[0].text).toContain('2026-08-01T11:00:00.000Z [delivery] a@example.com Delivery Failure: SES: rejected')
   })
 })

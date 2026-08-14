@@ -16,6 +16,34 @@ const resetSchema = z.object({
   name: z.string()
 })
 
+function formatEntries (entries) {
+  if (!entries.length) {
+    return 'none'
+  }
+  return entries.map(entry => {
+    const value = entry.value && typeof entry.value === 'object' ? JSON.stringify(entry.value) : entry.value
+    return `${entry.name}${entry.main ? ' (main)' : ''}: ${value}${entry.overridden ? ' [overridden]' : ''}`
+  }).join(', ')
+}
+
+function formatDesignSystem (designSystem) {
+  const lines = [
+    `"${designSystem.name}" (id ${designSystem._id})`,
+    `variables.colors: ${formatEntries(designSystem.variables.colors)}`,
+    `variables.fontStacks: ${formatEntries(designSystem.variables.fontStacks)}`,
+    `variables.images: ${formatEntries(designSystem.variables.images)}`,
+    `variables.links: ${formatEntries(designSystem.variables.links)}`,
+    `variables.texts: ${formatEntries(designSystem.variables.texts)}`,
+    `font.resources: ${formatEntries(designSystem.font.resources)}`,
+    `font.stacks: ${formatEntries(designSystem.font.stacks)}`,
+    `components.buttons: ${formatEntries(designSystem.components.buttons)}`,
+    `components.texts: ${formatEntries(designSystem.components.texts)}`,
+    `components.images: ${formatEntries(designSystem.components.images)}`,
+    `components.dividers: ${formatEntries(designSystem.components.dividers)}`
+  ]
+  return lines.join('\n')
+}
+
 export function createDesignSystemTools ({ client }) {
   return [
     {
@@ -34,11 +62,7 @@ export function createDesignSystemTools ({ client }) {
         const designSystem = list.items[0]
 
         if (args.action === 'get') {
-          return textResult(
-            `Design system "${designSystem.name}" - ${designSystem.variables.colors.length} colors, ` +
-            `${designSystem.variables.images.length} images, ${designSystem.font.stacks.length} font stacks, ` +
-            `${designSystem.components.buttons.length} button styles, ${designSystem.components.texts.length} text styles.`
-          )
+          return textResult(formatDesignSystem(designSystem))
         }
 
         const body = {}
@@ -49,9 +73,9 @@ export function createDesignSystemTools ({ client }) {
           body.resetOverrides = args.resetOverrides
         }
 
-        await client.patch(`/design-systems/${designSystem._id}`, body)
+        const result = await client.patch(`/design-systems/${designSystem._id}`, body)
         const verb = args.action === 'set_overrides' ? 'Applied' : 'Reset'
-        return textResult(`${verb} the design system override(s).`)
+        return textResult(`${verb} the design system override(s).\n${formatDesignSystem(result)}`)
       }
     }
   ]

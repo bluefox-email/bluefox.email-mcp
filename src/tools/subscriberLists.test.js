@@ -52,6 +52,50 @@ describe('create_subscriber_list', () => {
       }
     })
   })
+
+  test('creates a list with join-form styling and per-field contact field settings', async () => {
+    const { client, create_subscriber_list: createSubscriberList } = setup()
+    client.post.mockResolvedValue({ _id: 'list123', name: 'Newsletter' })
+
+    await createSubscriberList.handler({
+      name: 'Newsletter',
+      description: 'Weekly updates',
+      formLayout: 'column',
+      showCaptcha: false,
+      btnLabel: 'Join',
+      btnColor: '#000',
+      contactFields: [{ name: 'firstName', show: true, required: true, placeholder: 'First name', order: 0 }]
+    })
+
+    expect(client.post).toHaveBeenCalledWith('/subscriber-lists', {
+      name: 'Newsletter',
+      description: 'Weekly updates',
+      signupForm: {
+        formLayout: 'column',
+        showCaptcha: false,
+        btnLabel: 'Join',
+        btnColor: '#000',
+        propertiesStyle: { firstName: { show: true, required: true, placeholder: 'First name', order: 0 } }
+      }
+    })
+  })
+
+  test('creates a list with only per-field contact field settings, no other join-form styling', async () => {
+    const { client, create_subscriber_list: createSubscriberList } = setup()
+    client.post.mockResolvedValue({ _id: 'list123', name: 'Newsletter' })
+
+    await createSubscriberList.handler({
+      name: 'Newsletter',
+      description: 'Weekly updates',
+      contactFields: [{ name: 'firstName' }]
+    })
+
+    expect(client.post).toHaveBeenCalledWith('/subscriber-lists', {
+      name: 'Newsletter',
+      description: 'Weekly updates',
+      signupForm: { propertiesStyle: { firstName: {} } }
+    })
+  })
 })
 
 describe('update_subscriber_list', () => {
@@ -73,6 +117,30 @@ describe('update_subscriber_list', () => {
       private: true
     })
     expect(result.content[0].text).toBe('Updated subscriber list "New name".')
+  })
+
+  test('merges join-form style changes into the existing signupForm object instead of replacing it wholesale', async () => {
+    const { client, update_subscriber_list: updateSubscriberList } = setup()
+    client.get.mockResolvedValue({
+      signupForm: { formLayout: 'column', btnLabel: 'Subscribe', btnColor: '#123456', propertiesStyle: { company: { show: true } } }
+    })
+    client.patch.mockResolvedValue({ name: 'Newsletter' })
+
+    await updateSubscriberList.handler({
+      subscriberListId: 'list123',
+      btnLabel: 'Join now',
+      contactFields: [{ name: 'firstName', show: true }]
+    })
+
+    expect(client.get).toHaveBeenCalledWith('/subscriber-lists/list123')
+    expect(client.patch).toHaveBeenCalledWith('/subscriber-lists/list123', {
+      signupForm: {
+        formLayout: 'column',
+        btnLabel: 'Join now',
+        btnColor: '#123456',
+        propertiesStyle: { company: { show: true }, firstName: { show: true } }
+      }
+    })
   })
 
   test('merges into the existing doubleOptIn object instead of replacing it wholesale', async () => {
@@ -226,21 +294,48 @@ describe('get_subscriber_list', () => {
     expect(result.content[0].text).toBe('5 subscriber list(s): Newsletter (more not shown).')
   })
 
-  test('returns detail and stats for a single list found by id, including privacy and double opt-in status', async () => {
+  test('returns detail and stats for a single list found by id, including privacy and full double opt-in/signup form detail', async () => {
     const { client, get_subscriber_list: getSubscriberList } = setup()
     client.get.mockImplementation(async path => {
       if (path === '/subscriber-lists/list123') {
-        return { name: 'Newsletter', description: 'Weekly updates', private: true, doubleOptIn: { active: true } }
+        return {
+          name: 'Newsletter',
+          description: 'Weekly updates',
+          private: true,
+          doubleOptIn: { active: true, emailId: 'email123', redirectLink: 'https://example.com/confirmed', confirmationTitle: 'Confirmed!', confirmationMessage: 'You are in.' },
+          signupForm: { formLayout: 'column', showCaptcha: false, btnLabel: 'Join', btnFontColor: '#fff', btnColor: '#000', successMessage: 'Thanks!', propertiesStyle: { firstName: { show: true } } }
+        }
       }
       return { active: 10, paused: 1, unsubscribed: 2, unverified: 3 }
     })
 
     const result = await getSubscriberList.handler({ subscriberListId: 'list123' })
+    const text = result.content[0].text
 
-    expect(result.content[0].text).toBe('"Newsletter" - Weekly updates. Private. Double opt-in: on. 10 active, 1 paused, 2 unsubscribed, 3 unverified.')
+    expect(text).toContain('"Newsletter" - Weekly updates. Private.')
+    expect(text).toContain('Double opt-in: ON - confirmation email id email123. Redirect after confirming: https://example.com/confirmed. Confirmation title: "Confirmed!". Confirmation message: "You are in.".')
+    expect(text).toContain('Join form: layout column, captcha off, button "Join" (#fff on #000), success message: "Thanks!".')
+    expect(text).toContain('Custom contact field settings (propertiesStyle): {"firstName":{"show":true}}')
+    expect(text).toContain('Stats: 10 active, 1 paused, 2 unsubscribed, 3 unverified.')
   })
 
-  test('reports public and double opt-in off by default', async () => {
+  test('falls back to placeholders when double opt-in is on but has no emailId or redirectLink set yet', async () => {
+    const { client, get_subscriber_list: getSubscriberList } = setup()
+    client.get.mockImplementation(async path => {
+      if (path === '/subscriber-lists/list123') {
+        return { name: 'Newsletter', description: 'Weekly updates', doubleOptIn: { active: true } }
+      }
+      return { active: 0, paused: 0, unsubscribed: 0, unverified: 0 }
+    })
+
+    const result = await getSubscriberList.handler({ subscriberListId: 'list123' })
+    const text = result.content[0].text
+
+    expect(text).toContain('confirmation email id (none set)')
+    expect(text).toContain('Redirect after confirming: (none).')
+  })
+
+  test('reports public, double opt-in off, and no custom field settings by default', async () => {
     const { client, get_subscriber_list: getSubscriberList } = setup()
     client.get.mockImplementation(async path => {
       if (path === '/subscriber-lists/list123') {
@@ -250,8 +345,11 @@ describe('get_subscriber_list', () => {
     })
 
     const result = await getSubscriberList.handler({ subscriberListId: 'list123' })
+    const text = result.content[0].text
 
-    expect(result.content[0].text).toContain('Public. Double opt-in: off.')
+    expect(text).toContain('Public.')
+    expect(text).toContain('Double opt-in: OFF.')
+    expect(text).toContain('Custom contact field settings (propertiesStyle): none configured')
   })
 
   test('falls back to "no description" when the list has none', async () => {

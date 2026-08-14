@@ -3,15 +3,27 @@ import { textResult } from '../helpers/errors.js'
 
 const customFieldsSchema = z.record(z.any()).optional().describe('Custom contact field values, keyed by field name (e.g. {"plan": "pro"}) - a name that is not already a registered custom field on this project is silently dropped, not an error.')
 
-function formatSubscriber (item) {
-  const status = item.status === 'paused' && item.pausedUntil
+function formatStatus (item) {
+  return item.status === 'paused' && item.pausedUntil
     ? `paused until ${new Date(item.pausedUntil).toISOString().slice(0, 10)}`
     : item.status
-  const customFieldEntries = Object.entries(item.customFields || {})
-  const customFieldsText = customFieldEntries.length
-    ? ` - custom fields: ${customFieldEntries.map(([key, value]) => `${key}: ${value}`).join(', ')}`
-    : ''
-  return `${item.email} (${status})${customFieldsText}`
+}
+
+function formatCustomFields (item) {
+  const entries = Object.entries(item.customFields || {})
+  return entries.length ? ` - custom fields: ${entries.map(([key, value]) => `${key}: ${value}`).join(', ')}` : ''
+}
+
+// Compact - used for list_list_subscribers, where brevity across many rows matters more than completeness.
+function formatSubscriber (item) {
+  return `${item.email} (${formatStatus(item)})${formatCustomFields(item)}`
+}
+
+// Comprehensive - used for get_list_subscriber's single lookup, which (unlike the list view) also needs to
+// show name/tags so a caller can actually verify what's on this contact from this list's perspective.
+function formatSubscriberDetail (item) {
+  const tags = item.tags?.length ? item.tags.join(', ') : 'none'
+  return `${item.email}${item.name ? ` (${item.name})` : ''} - status: ${formatStatus(item)} - tags: ${tags}${formatCustomFields(item)}`
 }
 
 export function createSubscriptionTools ({ client, resolveIdOrRequired }) {
@@ -64,7 +76,7 @@ export function createSubscriptionTools ({ client, resolveIdOrRequired }) {
           label: 'subscriber list'
         })
         const result = await client.get(`/subscriber-lists/${id}/subscribers/${encodeURIComponent(args.email)}`)
-        return textResult(formatSubscriber(result))
+        return textResult(formatSubscriberDetail(result))
       }
     },
     {

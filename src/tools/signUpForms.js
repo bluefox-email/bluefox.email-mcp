@@ -100,6 +100,25 @@ function formatForm (item) {
   return `"${item.name}" (id ${item._id}) - ${parts.join(', ')}.`
 }
 
+function formatFormDetail (item) {
+  const lines = [
+    `"${item.name}" (id ${item._id})`,
+    `Target lists: ${item.subscriberListIds?.length || 0}`,
+    `Layout: ${item.formLayout}. Captcha: ${item.captchaType || (item.showCaptcha === false ? 'none' : 'svg')}${item.captchaType === 'turnstile' ? ` (theme ${item.turnstileTheme}, size ${item.turnstileSize}, appearance ${item.turnstileAppearance})` : ''}.`,
+    `Email placeholder: "${item.emailPlaceholder}". Captcha placeholder: "${item.captchaPlaceholder}".`,
+    `Button: label "${item.btnLabel}", font ${item.btnFont} ${item.btnFontSize}px, text color ${item.btnFontColor}, background ${item.btnColor}.`,
+    `Form text: font ${item.formFontStyle} ${item.formFontSize}px, color ${item.formFontColor}.`,
+    `Success message: "${item.successMessage}" (font ${item.successFont} ${item.successFontSize}px, color ${item.successFontColor}).`,
+    `Redirect after signup (redirectLink): ${item.redirectLink || '(none - shows the success message instead)'}`,
+    `Terms and conditions: ${item.termsAndConditions?.show ? `shown - "${item.termsAndConditions.label} ${item.termsAndConditions.linkLabel}" -> ${item.termsAndConditions.link}` : 'hidden'}.`,
+    `Double opt-in: ${item.doubleOptIn?.active
+      ? `ON - confirmation email id ${item.doubleOptIn.emailId || '(none set)'}. Redirect after confirming (doubleOptIn.redirectLink): ${item.doubleOptIn.redirectLink || '(none - shows the confirmation message instead)'}. Confirmation title: "${item.doubleOptIn.confirmationTitle}". Confirmation message: "${item.doubleOptIn.confirmationMessage}".`
+      : 'OFF.'}`,
+    `Custom contact field settings (propertiesStyle): ${item.propertiesStyle && Object.keys(item.propertiesStyle).length ? JSON.stringify(item.propertiesStyle) : 'none configured'}`
+  ]
+  return lines.join('\n')
+}
+
 export function createSignUpFormTools ({ client, resolveId, resolveIdOptional, resolveIdOrRequired }) {
   async function resolveSubscriberListIds ({ subscriberListIds, subscriberListNames }) {
     const fromNames = await Promise.all((subscriberListNames || []).map(name => resolveId({
@@ -157,7 +176,7 @@ export function createSignUpFormTools ({ client, resolveId, resolveIdOptional, r
         }
 
         const result = await client.post('/signup-forms', body)
-        return textResult(`Created signup form "${result.name}" (id ${result._id}).`)
+        return textResult(`Created signup form:\n${formatFormDetail(result)}`)
       }
     },
     {
@@ -227,7 +246,7 @@ export function createSignUpFormTools ({ client, resolveId, resolveIdOptional, r
         }
 
         const result = await client.patch(`/signup-forms/${id}`, body)
-        return textResult(`Updated signup form "${result.name}".`)
+        return textResult(`Updated signup form:\n${formatFormDetail(result)}`)
       }
     },
     {
@@ -258,7 +277,7 @@ export function createSignUpFormTools ({ client, resolveId, resolveIdOptional, r
           label: 'signup form'
         })
         const result = await client.get(`/signup-forms/${id}`)
-        return textResult(formatForm(result))
+        return textResult(formatFormDetail(result))
       }
     },
     {

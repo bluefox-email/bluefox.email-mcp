@@ -2,6 +2,27 @@ import { z } from 'zod'
 import { textResult } from '../helpers/errors.js'
 import { groupsSchema } from './segmentGroupsSchema.js'
 
+export function formatCondition (condition) {
+  const category = condition.category === 'engagement' ? '[engagement] ' : ''
+  const property = condition.property ? `${condition.property} ` : ''
+  const operator = condition.operator || 'any'
+  const value = condition.value !== undefined ? ` ${JSON.stringify(condition.value)}` : ''
+  return `${category}${property}${operator}${value}`
+}
+
+function formatSegmentDetail (segment) {
+  const lines = [`"${segment.name}" (id ${segment._id})`]
+  if (!segment.groups.length) {
+    lines.push('No groups defined - matches nobody.')
+    return lines.join('\n')
+  }
+  segment.groups.forEach((group, index) => {
+    const conditions = group.conditions.map(formatCondition).join(' AND ')
+    lines.push(`Group ${index + 1} (OR): ${conditions || '(no conditions - matches everyone)'}`)
+  })
+  return lines.join('\n')
+}
+
 export function createSegmentTools ({ client, resolveIdOrRequired }) {
   return [
     {
@@ -29,7 +50,7 @@ export function createSegmentTools ({ client, resolveIdOrRequired }) {
 
         if (args.action === 'create') {
           const result = await client.post('/segments', { name: args.name, groups: args.groups })
-          return textResult(`Created segment "${result.name}" (id ${result._id}).`)
+          return textResult(`Created segment:\n${formatSegmentDetail(result)}`)
         }
 
         const id = await resolveIdOrRequired({
@@ -42,7 +63,7 @@ export function createSegmentTools ({ client, resolveIdOrRequired }) {
 
         if (args.action === 'get') {
           const segment = await client.get(`/segments/${id}`)
-          return textResult(`"${segment.name}" - ${segment.groups.length} group(s), ${segment.groups.reduce((n, g) => n + g.conditions.length, 0)} total condition(s).`)
+          return textResult(formatSegmentDetail(segment))
         }
 
         if (args.action === 'update') {
@@ -54,7 +75,7 @@ export function createSegmentTools ({ client, resolveIdOrRequired }) {
             body.groups = args.groups
           }
           const result = await client.patch(`/segments/${id}`, body)
-          return textResult(`Updated segment "${result.name}".`)
+          return textResult(`Updated segment:\n${formatSegmentDetail(result)}`)
         }
 
         await client.del(`/segments/${id}`)

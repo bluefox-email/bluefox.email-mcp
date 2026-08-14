@@ -21,13 +21,22 @@ beforeEach(() => {
 describe('set_byo_aws_config', () => {
   test('submits only the given awsConfig fields', async () => {
     const { client, set_byo_aws_config: setConfig } = setup()
-    client.patch.mockResolvedValue({ name: 'Project', status: 'sandbox', awsConfig: { accessKeyIdHint: 'AKI...X', roleArnHint: undefined } })
+    client.patch.mockResolvedValue({ name: 'Project', status: 'sandbox', awsConfig: { accessKeyIdHint: 'AKI...X' } })
 
     const result = await setConfig.handler({ accessKeyId: 'a', secretAccessKey: 'b', region: 'us-east-1' })
 
     expect(client.patch).toHaveBeenCalledWith('', { awsConfig: { accessKeyId: 'a', secretAccessKey: 'b', region: 'us-east-1' } })
     expect(result.content[0].text).toContain('status: sandbox')
-    expect(result.content[0].text).toContain('none')
+    expect(result.content[0].text).toContain('AKI...X')
+  })
+
+  test('submits a per-identity region alongside name/email', async () => {
+    const { client, set_byo_aws_config: setConfig } = setup()
+    client.patch.mockResolvedValue({ name: 'Project', status: 'sandbox', awsConfig: {} })
+
+    await setConfig.handler({ senderIdentities: [{ name: 'Support', email: 'support@example.com', region: 'us-east-1' }] })
+
+    expect(client.patch).toHaveBeenCalledWith('', { awsConfig: { senderIdentities: [{ name: 'Support', email: 'support@example.com', region: 'us-east-1' }] } })
   })
 
   test('includes status: byoAwsSes when activating', async () => {
@@ -39,14 +48,63 @@ describe('set_byo_aws_config', () => {
     expect(client.patch).toHaveBeenCalledWith('', { awsConfig: { roleArn: 'arn:x' }, status: 'byoAwsSes' })
   })
 
-  test('reports both hints when present', async () => {
+  test('reports region, limit, hints, and sender identities when present', async () => {
     const { client, set_byo_aws_config: setConfig } = setup()
-    client.patch.mockResolvedValue({ name: 'Project', status: 'byoAwsSes', awsConfig: { accessKeyIdHint: 'AKI...X', roleArnHint: 'arn...x' } })
+    client.patch.mockResolvedValue({
+      name: 'Project',
+      status: 'byoAwsSes',
+      awsConfig: {
+        accessKeyIdHint: 'AKI...X',
+        secretAccessKeyHint: 'SEC...Y',
+        roleArnHint: 'arn...x',
+        region: 'us-east-1',
+        limit: 14,
+        senderIdentities: [{ name: 'Support', email: 'support@example.com', region: 'us-east-1' }]
+      }
+    })
 
     const result = await setConfig.handler({ removeAwsConfig: 'accessKey' })
+    const text = result.content[0].text
 
-    expect(result.content[0].text).toContain('AKI...X')
-    expect(result.content[0].text).toContain('arn...x')
+    expect(text).toContain('AKI...X')
+    expect(text).toContain('SEC...Y')
+    expect(text).toContain('arn...x')
+    expect(text).toContain('Region: us-east-1')
+    expect(text).toContain('Limit: 14 sends/sec')
+    expect(text).toContain('Support <support@example.com> (us-east-1)')
+  })
+})
+
+describe('get_aws_config', () => {
+  test('reads back the currently configured AWS setup', async () => {
+    const { client, get_aws_config: getAwsConfig } = setup()
+    client.get.mockResolvedValue({
+      name: 'Project',
+      status: 'byoAwsSes',
+      awsConfig: {
+        accessKeyIdHint: 'AKI...X',
+        region: 'us-east-1',
+        limit: 14,
+        senderIdentities: [{ name: 'Support', email: 'support@example.com' }]
+      }
+    })
+
+    const result = await getAwsConfig.handler({})
+
+    expect(client.get).toHaveBeenCalledWith('')
+    expect(result.content[0].text).toContain('Region: us-east-1')
+    expect(result.content[0].text).toContain('Support <support@example.com>')
+  })
+
+  test('reports none/no config when nothing is set yet', async () => {
+    const { client, get_aws_config: getAwsConfig } = setup()
+    client.get.mockResolvedValue({ name: 'Project', status: 'sandbox' })
+
+    const result = await getAwsConfig.handler({})
+    const text = result.content[0].text
+
+    expect(text).toContain('Access key: none')
+    expect(text).toContain('Sender identities: none')
   })
 })
 

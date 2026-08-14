@@ -140,7 +140,7 @@ export function createContactOpsTools ({ client, resolveIdOrRequired }) {
       name: 'export_contacts',
       config: {
         title: 'Export contacts to a CSV file',
-        description: 'Downloads every contact on the project to a local CSV file (email, name, tags, custom fields, subscriber lists) and reports the saved path.',
+        description: 'Downloads every contact on the project to a local CSV file (email, name, tags, custom fields, subscriber lists, engagement dates, created/updated timestamps) and reports the saved path.',
         inputSchema: {}
       },
       handler: async () => {
@@ -163,13 +163,18 @@ export function createContactOpsTools ({ client, resolveIdOrRequired }) {
         }
 
         const customFieldNames = [...new Set(rows.flatMap(row => Object.keys(extractCustomFields(row))))]
-        const fields = ['email', 'name', 'tags', '_lists', ...customFieldNames]
+        const fields = ['email', 'name', 'tags', '_lists', ...customFieldNames, 'lastOpenDate', 'lastClickDate', 'lastReceiveDate', 'createdAt', 'updatedAt']
         const flatRows = rows.map(row => ({
           email: row.email,
           name: row.name,
           tags: (row.tags || []).join(';'),
           _lists: (row._lists || []).join(';'),
-          ...extractCustomFields(row)
+          ...extractCustomFields(row),
+          lastOpenDate: row.lastOpenDate,
+          lastClickDate: row.lastClickDate,
+          lastReceiveDate: row.lastReceiveDate,
+          createdAt: row.createdAt,
+          updatedAt: row.updatedAt
         }))
 
         const filePath = path.join(os.tmpdir(), `bluefox-contacts-export-${Date.now()}.csv`)

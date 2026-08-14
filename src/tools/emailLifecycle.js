@@ -14,6 +14,43 @@ const LABEL = {
   triggered: 'triggered email'
 }
 
+export function formatEmailDetail (type, detail, stats) {
+  const lines = [
+    `"${detail.name}" (id ${detail._id})`,
+    `Subject: "${detail.subject}"`
+  ]
+  if (detail.previewText) {
+    lines.push(`Preview text: "${detail.previewText}"`)
+  }
+  lines.push(`Content type: ${detail.type || 'chamaileon (visual editor)'}`)
+  if (type === 'campaign') {
+    lines.push(`Status: ${detail.status}${detail.scheduledTo ? `, scheduled for ${detail.scheduledTo} (time zone: ${detail.timeZone || 'UTC'})` : ''}`)
+    lines.push(`Subscriber list id: ${detail.subscriberListId || 'none'}`)
+    if (detail.segmentId) {
+      lines.push(`Segment id: ${detail.segmentId}`)
+    }
+  }
+  if (type === 'triggered') {
+    lines.push(`Subscriber list id: ${detail.subscriberListId || 'none'}`)
+  }
+  if (detail.senderIdentity) {
+    lines.push(`Sender identity id: ${detail.senderIdentity}`)
+  }
+  if (detail.replyTo) {
+    lines.push(`Reply-to: ${detail.replyTo}`)
+  }
+  if (type !== 'transactional') {
+    lines.push(`Exclude unengaged: ${detail.excludeUnengaged ? 'yes' : 'no'}`)
+  }
+  if (detail.feeds?.length) {
+    lines.push(`Feeds: ${detail.feeds.map(feed => feed.variableName || feed.url).join(', ')}`)
+  }
+  if (stats) {
+    lines.push(`Stats: ${stats.sent} sent, ${stats.failed || 0} failed, ${stats.opens} opens (${stats.uniqueOpens} unique), ${stats.clicks} clicks (${stats.uniqueClicks} unique), ${stats.bounce} bounced, ${stats.complaint} complaints.`)
+  }
+  return lines.join('\n')
+}
+
 export function createEmailLifecycleTools ({ client, resolveId, resolveIdOptional }) {
   async function resolveEmailId (type, { id, name }) {
     if (id) {
@@ -50,6 +87,7 @@ export function createEmailLifecycleTools ({ client, resolveId, resolveIdOptiona
           segmentName: z.string().optional().describe('Campaign only. Looked up automatically.'),
           status: z.enum(['draft', 'archive', 'scheduled']).optional().describe('Campaign only. Set to "draft" to cancel a scheduled send.'),
           scheduledFor: z.string().optional().describe('Campaign only. ISO 8601 date-time - resolve relative phrases like "tomorrow at 8am" to an absolute value yourself first. Set alongside status "scheduled" to (re)schedule.'),
+          timeZone: z.string().optional().describe('Campaign only. IANA time zone (e.g. "America/New_York") used to interpret scheduledFor.'),
           excludeUnengaged: z.boolean().optional().describe('Campaign/triggered only.')
         }
       },
@@ -72,7 +110,7 @@ export function createEmailLifecycleTools ({ client, resolveId, resolveIdOptiona
         if (args.previewText) {
           body.previewText = args.previewText
         }
-        if (args.excludeUnengaged !== undefined) {
+        if (args.excludeUnengaged !== undefined && args.type !== 'transactional') {
           body.excludeUnengaged = args.excludeUnengaged
         }
         if (args.replyTo) {
@@ -123,10 +161,13 @@ export function createEmailLifecycleTools ({ client, resolveId, resolveIdOptiona
           if (args.scheduledFor) {
             body.scheduledTo = args.scheduledFor
           }
+          if (args.timeZone) {
+            body.timeZone = args.timeZone
+          }
         }
 
         const result = await client.patch(`${RESOURCE_PATH[args.type]}/${id}`, body)
-        return textResult(`Updated ${LABEL[args.type]} "${result.name}".`)
+        return textResult(`Updated ${LABEL[args.type]}:\n${formatEmailDetail(args.type, result)}`)
       }
     },
     {
@@ -157,10 +198,7 @@ export function createEmailLifecycleTools ({ client, resolveId, resolveIdOptiona
           client.get(`${resourcePath}/${id}`),
           client.get(`${resourcePath}/${id}/stats`)
         ])
-        return textResult(
-          `"${detail.name}" - subject: "${detail.subject}". ` +
-          `${stats.sent} sent, ${stats.opens} opens (${stats.uniqueOpens} unique), ${stats.clicks} clicks (${stats.uniqueClicks} unique), ${stats.bounce} bounced, ${stats.complaint} complaints.`
-        )
+        return textResult(formatEmailDetail(args.type, detail, stats))
       }
     },
     {
@@ -236,7 +274,8 @@ export function createEmailLifecycleTools ({ client, resolveId, resolveIdOptiona
 
         const lines = result.items.map(r => {
           const flags = ['bounced', 'complained', 'unsubscribed', 'paused', 'subscribed', 'resubscribed'].filter(f => r[f]).join(', ')
-          return `${r.email} - ${r.status}, ${r.opens} opens, ${r.clicks} clicks${flags ? ` (${flags})` : ''}`
+          const errors = r.errors?.length ? ` - errors: ${r.errors.map(e => typeof e === 'string' ? e : (e.message || JSON.stringify(e))).join('; ')}` : ''
+          return `${r.email} - ${r.status}${r.sentAt ? ` at ${r.sentAt}` : ''}, ${r.opens} opens, ${r.clicks} clicks${flags ? ` (${flags})` : ''}${errors}`
         })
 
         const shownSoFar = (args.skip || 0) + result.items.length
@@ -280,7 +319,7 @@ export function createEmailLifecycleTools ({ client, resolveId, resolveIdOptiona
         if (!result.count) {
           return textResult('No errors logged.')
         }
-        const lines = result.items.map(item => `[${item.source}]${item.recipient ? ` ${item.recipient}` : ''} ${item.errorName}: ${item.errorMessage}`)
+        const lines = result.items.map(item => `${item.createdAt} [${item.source}]${item.recipient ? ` ${item.recipient}` : ''} ${item.errorName}: ${item.errorMessage}`)
         return textResult(`${result.count} error(s), ${result.unseenCount} unseen:\n${lines.join('\n')}`)
       }
     }

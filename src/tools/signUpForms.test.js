@@ -29,7 +29,8 @@ describe('create_signup_form', () => {
 
     expect(client.get).not.toHaveBeenCalled()
     expect(client.post).toHaveBeenCalledWith('/signup-forms', { name: 'Newsletter form' })
-    expect(result.content[0].text).toBe('Created signup form "Newsletter form" (id form123).')
+    expect(result.content[0].text).toContain('Created signup form:')
+    expect(result.content[0].text).toContain('"Newsletter form" (id form123)')
   })
 
   test('creates a form targeting lists by id and by name, with turnstile and terms and conditions', async () => {
@@ -119,7 +120,8 @@ describe('update_signup_form', () => {
 
     expect(client.get).not.toHaveBeenCalled()
     expect(client.patch).toHaveBeenCalledWith('/signup-forms/form123', { name: 'New name', btnLabel: 'Join' })
-    expect(result.content[0].text).toBe('Updated signup form "New name".')
+    expect(result.content[0].text).toContain('Updated signup form:')
+    expect(result.content[0].text).toContain('"New name"')
   })
 
   test('resolves the form by name and merges into the existing doubleOptIn object instead of replacing it wholesale', async () => {
@@ -288,6 +290,17 @@ describe('get_signup_form', () => {
     expect(result.content[0].text).toContain('"Newsletter form" (id form123) - captcha: turnstile, double opt-in: on, lists: 1.')
   })
 
+  test('shows no captcha in the list view when showCaptcha is explicitly false', async () => {
+    const { client, get_signup_form: getSignUpForm } = setup()
+    client.get.mockResolvedValue({
+      count: 1,
+      items: [{ _id: 'form123', name: 'Newsletter form', showCaptcha: false }]
+    })
+
+    const result = await getSignUpForm.handler({})
+    expect(result.content[0].text).toContain('captcha: none')
+  })
+
   test('notes when more forms exist than were shown', async () => {
     const { client, get_signup_form: getSignUpForm } = setup()
     client.get.mockResolvedValue({ count: 5, items: [{ _id: 'form123', name: 'Newsletter form' }] })
@@ -304,20 +317,76 @@ describe('get_signup_form', () => {
     expect(result.content[0].text).toBe('This project has no signup forms yet.')
   })
 
-  test('returns detail for a single form found by id, defaulting to svg captcha and off double opt-in', async () => {
+  test('returns full detail for a single form, including redirectLink and doubleOptIn.redirectLink', async () => {
     const { client, get_signup_form: getSignUpForm } = setup()
-    client.get.mockResolvedValue({ _id: 'form123', name: 'Newsletter form' })
+    client.get.mockResolvedValue({
+      _id: 'form123',
+      name: 'Newsletter form',
+      formLayout: 'column',
+      captchaType: 'svg',
+      showCaptcha: true,
+      emailPlaceholder: 'your@email.com',
+      captchaPlaceholder: 'enter captcha text',
+      btnLabel: 'Submit',
+      btnFont: 'Roboto',
+      btnFontSize: '16',
+      btnFontColor: '#FFFFFF',
+      btnColor: '#10B1EF',
+      formFontStyle: 'Roboto',
+      formFontSize: '16',
+      formFontColor: '#000000',
+      successMessage: 'Thank you!',
+      successFont: 'Roboto',
+      successFontSize: '16',
+      successFontColor: '#000000',
+      redirectLink: 'https://example.com/thanks',
+      termsAndConditions: { show: true, label: 'I agree to the', linkLabel: 'Terms', link: 'https://example.com/terms' },
+      doubleOptIn: { active: true, emailId: 'email123', redirectLink: 'https://example.com/confirmed', confirmationTitle: 'Confirmed!', confirmationMessage: 'You are in.' },
+      propertiesStyle: { firstName: { show: true } },
+      subscriberListIds: ['list123']
+    })
 
     const result = await getSignUpForm.handler({ signUpFormId: 'form123' })
-    expect(result.content[0].text).toBe('"Newsletter form" (id form123) - captcha: svg, double opt-in: off, lists: 0.')
+    const text = result.content[0].text
+
+    expect(text).toContain('"Newsletter form" (id form123)')
+    expect(text).toContain('Target lists: 1')
+    expect(text).toContain('Redirect after signup (redirectLink): https://example.com/thanks')
+    expect(text).toContain('Terms and conditions: shown - "I agree to the Terms" -> https://example.com/terms')
+    expect(text).toContain('Double opt-in: ON - confirmation email id email123. Redirect after confirming (doubleOptIn.redirectLink): https://example.com/confirmed.')
+    expect(text).toContain('Custom contact field settings (propertiesStyle): {"firstName":{"show":true}}')
   })
 
-  test('reports no captcha when showCaptcha is explicitly false', async () => {
+  test('handles a minimal form with no redirectLink, terms, or double opt-in configured', async () => {
     const { client, get_signup_form: getSignUpForm } = setup()
     client.get.mockResolvedValue({ _id: 'form123', name: 'Newsletter form', showCaptcha: false })
 
     const result = await getSignUpForm.handler({ signUpFormId: 'form123' })
-    expect(result.content[0].text).toContain('captcha: none')
+    const text = result.content[0].text
+
+    expect(text).toContain('Captcha: none')
+    expect(text).toContain('Redirect after signup (redirectLink): (none - shows the success message instead)')
+    expect(text).toContain('Double opt-in: OFF.')
+    expect(text).toContain('Custom contact field settings (propertiesStyle): none configured')
+  })
+
+  test('falls back to placeholders when double opt-in is on but has no emailId or redirectLink set yet', async () => {
+    const { client, get_signup_form: getSignUpForm } = setup()
+    client.get.mockResolvedValue({ _id: 'form123', name: 'Newsletter form', doubleOptIn: { active: true } })
+
+    const result = await getSignUpForm.handler({ signUpFormId: 'form123' })
+    const text = result.content[0].text
+
+    expect(text).toContain('confirmation email id (none set)')
+    expect(text).toContain('Redirect after confirming (doubleOptIn.redirectLink): (none - shows the confirmation message instead)')
+  })
+
+  test('includes turnstile config details when captchaType is turnstile', async () => {
+    const { client, get_signup_form: getSignUpForm } = setup()
+    client.get.mockResolvedValue({ _id: 'form123', name: 'Newsletter form', captchaType: 'turnstile', turnstileTheme: 'dark', turnstileSize: 'compact', turnstileAppearance: 'always' })
+
+    const result = await getSignUpForm.handler({ signUpFormId: 'form123' })
+    expect(result.content[0].text).toContain('Captcha: turnstile (theme dark, size compact, appearance always)')
   })
 })
 

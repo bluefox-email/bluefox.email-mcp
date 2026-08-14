@@ -60,14 +60,23 @@ describe('list_list_subscribers', () => {
 })
 
 describe('get_list_subscriber', () => {
-  test('reports a subscriber\'s status', async () => {
+  test('reports a subscriber\'s status and tags', async () => {
     const { client, get_list_subscriber: getSubscriber } = setup()
-    client.get.mockResolvedValue({ email: 'alice@example.com', status: 'unsubscribed' })
+    client.get.mockResolvedValue({ email: 'alice@example.com', status: 'unsubscribed', tags: ['vip'] })
 
     const result = await getSubscriber.handler({ subscriberListId: 'list123', email: 'alice@example.com' })
 
     expect(client.get).toHaveBeenCalledWith('/subscriber-lists/list123/subscribers/alice%40example.com')
-    expect(result.content[0].text).toBe('alice@example.com (unsubscribed)')
+    expect(result.content[0].text).toBe('alice@example.com - status: unsubscribed - tags: vip')
+  })
+
+  test('reports a name and "none" for tags when there are none', async () => {
+    const { client, get_list_subscriber: getSubscriber } = setup()
+    client.get.mockResolvedValue({ email: 'alice@example.com', name: 'Alice', status: 'active' })
+
+    const result = await getSubscriber.handler({ subscriberListId: 'list123', email: 'alice@example.com' })
+
+    expect(result.content[0].text).toBe('alice@example.com (Alice) - status: active - tags: none')
   })
 
   test('includes the subscriber\'s custom field values', async () => {
@@ -76,7 +85,7 @@ describe('get_list_subscriber', () => {
 
     const result = await getSubscriber.handler({ subscriberListId: 'list123', email: 'alice@example.com' })
 
-    expect(result.content[0].text).toBe('alice@example.com (active) - custom fields: plan: pro')
+    expect(result.content[0].text).toBe('alice@example.com - status: active - tags: none - custom fields: plan: pro')
   })
 })
 

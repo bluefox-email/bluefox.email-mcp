@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { textResult } from '../helpers/errors.js'
 import { feedsSchema } from './feedsSchema.js'
+import { formatEmailDetail } from './emailLifecycle.js'
 
 export function createTriggeredEmailTools ({ client, resolveIdOrRequired, resolveIdOptional }) {
   return [
@@ -64,7 +65,7 @@ export function createTriggeredEmailTools ({ client, resolveIdOrRequired, resolv
         }
 
         const result = await client.post('/triggered-emails', body)
-        return textResult(`Created triggered email "${result.name}" (id ${result._id}).`)
+        return textResult(`Created triggered email:\n${formatEmailDetail('triggered', result)}`)
       }
     },
     {

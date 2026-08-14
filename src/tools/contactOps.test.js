@@ -212,7 +212,27 @@ describe('export_contacts', () => {
     await exportContacts.handler({})
 
     const [, csv] = fs.writeFile.mock.calls[0]
-    expect(csv).toBe('email,name,tags,_lists\na@example.com,,,')
+    expect(csv).toBe('email,name,tags,_lists,lastOpenDate,lastClickDate,lastReceiveDate,createdAt,updatedAt\na@example.com,,,,,,,,')
+  })
+
+  test('includes engagement dates and timestamps when present', async () => {
+    const { client, export_contacts: exportContacts } = setup()
+    client.get.mockResolvedValue({
+      count: 1,
+      items: [{
+        email: 'a@example.com',
+        lastOpenDate: '2026-01-05T00:00:00.000Z',
+        lastClickDate: '2026-01-06T00:00:00.000Z',
+        lastReceiveDate: '2026-01-07T00:00:00.000Z',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-02T00:00:00.000Z'
+      }]
+    })
+
+    await exportContacts.handler({})
+
+    const [, csv] = fs.writeFile.mock.calls[0]
+    expect(csv).toContain('2026-01-05T00:00:00.000Z,2026-01-06T00:00:00.000Z,2026-01-07T00:00:00.000Z,2026-01-01T00:00:00.000Z,2026-01-02T00:00:00.000Z')
   })
 
   test('escapes values containing commas or quotes', async () => {

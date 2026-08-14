@@ -16,7 +16,7 @@ describe('MCP server smoke test', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       status: 201,
-      json: async () => ({ status: 201, result: { _id: 'campaign123', name: 'Summer Sale' } })
+      json: async () => ({ status: 201, result: { _id: 'campaign123', name: 'Summer Sale', subject: 'Big discounts', contentType: 'chamaileon', status: 'draft', subscriberListId: 'list123' } })
     })
 
     const bluefoxClient = createBluefoxClient({ baseUrl: 'https://api.bluefox.email', projectId: 'proj1', apiKey: 'key1' })
@@ -62,7 +62,10 @@ describe('MCP server smoke test', () => {
 
     expect(result.isError).toBeFalsy()
     expect(result.content[0].type).toBe('text')
-    expect(result.content[0].text).toBe('Created campaign "Summer Sale" (id campaign123) as a draft.')
+    expect(result.content[0].text).toContain('Created campaign:')
+    expect(result.content[0].text).toContain('"Summer Sale" (id campaign123)')
+    expect(result.content[0].text).toContain('Subject: "Big discounts"')
+    expect(result.content[0].text).toContain('Status: draft')
   })
 
   test('a validation-style tool call still round-trips through the real MCP protocol', async () => {

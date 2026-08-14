@@ -1,6 +1,23 @@
 import { z } from 'zod'
 import { textResult } from '../helpers/errors.js'
 
+function formatSendingRates (sendingRates) {
+  if (!sendingRates?.length) {
+    return 'none configured'
+  }
+  return sendingRates.map(r => `${r.region}: ${r.ratePerSecond}/s`).join(', ')
+}
+
+function formatLimitIncreases (limitIncreases) {
+  if (!limitIncreases?.length) {
+    return 'none requested yet'
+  }
+  return limitIncreases.map(i =>
+    `${i.createdAt ? new Date(i.createdAt).toISOString() : 'unknown date'}: requested ${i.requestedLimit} (${i.status}` +
+    `${i.status !== 'pending' && i.approvedLimit != null ? `, approved limit ${i.approvedLimit}` : ''}) - ${i.reason}`
+  ).join('\n')
+}
+
 export function createProductionAccessTools ({ client }) {
   return [
     {
@@ -26,19 +43,18 @@ export function createProductionAccessTools ({ client }) {
       name: 'get_production_access_status',
       config: {
         title: 'Get production access status',
-        description: 'Reports this project\'s production access request status, domain verification status, and current sending limits.',
+        description: 'Reports this project\'s production access request status, domain verification status, current sending limits and per-region rates, and the full history of limit increase requests.',
         inputSchema: {}
       },
       handler: async () => {
         const result = await client.get('/production-access')
-        const parts = [`request: ${result.requestStatus}`, `domain: ${result.domainStatus}${result.verifiedDomain ? ` (${result.verifiedDomain})` : ''}`, `monthly limit: ${result.monthlyLimit}`]
-        if (result.limitIncreases?.length) {
-          const pending = result.limitIncreases.find(i => i.status === 'pending')
-          if (pending) {
-            parts.push(`pending limit increase: ${pending.requestedLimit}`)
-          }
-        }
-        return textResult(parts.join(', ') + '.')
+        const parts = [
+          `request: ${result.requestStatus}`,
+          `domain: ${result.domainStatus}${result.verifiedDomain ? ` (${result.verifiedDomain})` : ''}`,
+          `monthly limit: ${result.monthlyLimit}`,
+          `sending rates: ${formatSendingRates(result.sendingRates)}`
+        ]
+        return textResult(`${parts.join(', ')}.\nLimit increase history:\n${formatLimitIncreases(result.limitIncreases)}`)
       }
     },
     {

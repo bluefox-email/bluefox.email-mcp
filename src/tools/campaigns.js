@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { textResult } from '../helpers/errors.js'
 import { feedsSchema } from './feedsSchema.js'
+import { formatEmailDetail } from './emailLifecycle.js'
 
 export function createCampaignTools ({ client, resolveIdOrRequired, resolveIdOptional }) {
   return [
@@ -83,8 +84,7 @@ export function createCampaignTools ({ client, resolveIdOrRequired, resolveIdOpt
         }
 
         const result = await client.post('/campaigns', body)
-        const scheduleNote = args.scheduledFor ? ` and scheduled for ${args.scheduledFor}` : ' as a draft'
-        return textResult(`Created campaign "${result.name}" (id ${result._id})${scheduleNote}.`)
+        return textResult(`Created campaign:\n${formatEmailDetail('campaign', result)}`)
       }
     }
   ]

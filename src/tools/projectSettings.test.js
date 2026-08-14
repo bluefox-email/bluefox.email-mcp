@@ -9,14 +9,39 @@ function setup () {
 }
 
 describe('manage_project_settings', () => {
-  test('get returns a summary', async () => {
+  test('get returns a summary, including the unengaged-contact segment', async () => {
     const { client, manageProjectSettings } = setup()
-    client.get.mockResolvedValue({ name: 'My Project', status: 'production', logoUrl: 'https://example.com/logo.png', autoRemoveFromList: { bounce: 'deleteContact', complaint: 'off' }, whiteList: ['example.com', 'shop.example.com'] })
+    client.get.mockResolvedValue({
+      name: 'My Project',
+      status: 'production',
+      logoUrl: 'https://example.com/logo.png',
+      autoRemoveFromList: { bounce: 'deleteContact', complaint: 'off' },
+      whiteList: ['example.com', 'shop.example.com'],
+      unengagedContactSegment: { groups: [{ conditions: [{ operator: 'not-opened' }] }] }
+    })
 
     const result = await manageProjectSettings.handler({ action: 'get' })
+    const text = result.content[0].text
 
     expect(client.get).toHaveBeenCalledWith('')
-    expect(result.content[0].text).toBe('Project "My Project" - status: production, logoUrl: https://example.com/logo.png, auto-remove on bounce: deleteContact, auto-remove on complaint: off, domain whitelist: example.com, shop.example.com.')
+    expect(text).toContain('Project "My Project" - status: production, logoUrl: https://example.com/logo.png, auto-remove on bounce: deleteContact, auto-remove on complaint: off, domain whitelist: example.com, shop.example.com.')
+    expect(text).toContain('Unengaged contact segment: Group 1 (OR): not-opened')
+  })
+
+  test('get reports the unengaged-contact segment as not configured when unset', async () => {
+    const { client, manageProjectSettings } = setup()
+    client.get.mockResolvedValue({ name: 'My Project', status: 'sandbox' })
+
+    const result = await manageProjectSettings.handler({ action: 'get' })
+    expect(result.content[0].text).toContain('Unengaged contact segment: not configured')
+  })
+
+  test('get reports a group with no conditions in the unengaged-contact segment', async () => {
+    const { client, manageProjectSettings } = setup()
+    client.get.mockResolvedValue({ name: 'My Project', status: 'sandbox', unengagedContactSegment: { groups: [{ conditions: [] }] } })
+
+    const result = await manageProjectSettings.handler({ action: 'get' })
+    expect(result.content[0].text).toContain('Group 1 (OR): (no conditions - matches everyone)')
   })
 
   test('get reports no domain whitelist when unset', async () => {
@@ -43,14 +68,15 @@ describe('manage_project_settings', () => {
     expect(result.content[0].text).toContain('logoUrl: none')
   })
 
-  test('update sends only the given fields', async () => {
+  test('update sends only the given fields and returns the resulting full settings', async () => {
     const { client, manageProjectSettings } = setup()
-    client.patch.mockResolvedValue({ name: 'New Name' })
+    client.patch.mockResolvedValue({ name: 'New Name', status: 'sandbox' })
 
     const result = await manageProjectSettings.handler({ action: 'update', name: 'New Name' })
 
     expect(client.patch).toHaveBeenCalledWith('', { name: 'New Name' })
-    expect(result.content[0].text).toBe('Updated project settings - name is now "New Name".')
+    expect(result.content[0].text).toContain('Updated project "New Name" - status: sandbox')
+    expect(result.content[0].text).toContain('Unengaged contact segment: not configured')
   })
 
   test('update can set logoUrl and the unengaged-contact segment together', async () => {
@@ -69,13 +95,14 @@ describe('manage_project_settings', () => {
     })
   })
 
-  test('update replaces the domain whitelist', async () => {
+  test('update replaces the domain whitelist and echoes the resulting list', async () => {
     const { client, manageProjectSettings } = setup()
-    client.patch.mockResolvedValue({ name: 'My Project' })
+    client.patch.mockResolvedValue({ name: 'My Project', whiteList: ['example.com'] })
 
-    await manageProjectSettings.handler({ action: 'update', domainWhitelist: ['example.com'] })
+    const result = await manageProjectSettings.handler({ action: 'update', domainWhitelist: ['example.com'] })
 
     expect(client.patch).toHaveBeenCalledWith('', { whiteList: ['example.com'] })
+    expect(result.content[0].text).toContain('domain whitelist: example.com.')
   })
 
   test('update clears the domain whitelist with an empty array', async () => {

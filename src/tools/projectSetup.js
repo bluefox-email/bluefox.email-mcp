@@ -4,6 +4,14 @@ import path from 'path'
 import { z } from 'zod'
 import { textResult } from '../helpers/errors.js'
 
+function formatAwsConfig (project) {
+  const awsConfig = project.awsConfig || {}
+  const identities = awsConfig.senderIdentities?.length
+    ? awsConfig.senderIdentities.map(identity => `${identity.name} <${identity.email}>${identity.region ? ` (${identity.region})` : ''}`).join(', ')
+    : 'none'
+  return `AWS config for "${project.name}" (status: ${project.status}). Access key: ${awsConfig.accessKeyIdHint || 'none'}. Secret key: ${awsConfig.secretAccessKeyHint || 'none'}. STS role: ${awsConfig.roleArnHint || 'none'}. Region: ${awsConfig.region || 'none'}. Limit: ${awsConfig.limit ?? 'none'} sends/sec. Sender identities: ${identities}.`
+}
+
 export function createProjectSetupTools ({ client }) {
   return [
     {
@@ -17,7 +25,7 @@ export function createProjectSetupTools ({ client }) {
           secretAccessKey: z.string().optional(),
           region: z.string().optional(),
           limit: z.number().optional().describe('Max sends per second.'),
-          senderIdentities: z.array(z.object({ name: z.string(), email: z.string() })).optional(),
+          senderIdentities: z.array(z.object({ name: z.string(), email: z.string(), region: z.string().optional() })).optional(),
           removeAwsConfig: z.enum(['sts', 'accessKey']).optional().describe('Removes just the STS role or just the static keys, leaving the other half (if set) intact.'),
           activateByoAwsSes: z.boolean().optional().describe('Also switches the project\'s status to byoAwsSes.')
         }
@@ -34,7 +42,19 @@ export function createProjectSetupTools ({ client }) {
           body.status = 'byoAwsSes'
         }
         const result = await client.patch('', body)
-        return textResult(`Updated AWS config for "${result.name}" (status: ${result.status}). Access key: ${result.awsConfig?.accessKeyIdHint || 'none'}, STS role: ${result.awsConfig?.roleArnHint || 'none'}.`)
+        return textResult(`Updated ${formatAwsConfig(result)}`)
+      }
+    },
+    {
+      name: 'get_aws_config',
+      config: {
+        title: 'Get the current BYO-AWS SES configuration',
+        description: 'Reads back this project\'s currently configured BYO-AWS region, sending limit, sender identities, and credential hints (the real secrets are never returned).',
+        inputSchema: {}
+      },
+      handler: async () => {
+        const project = await client.get('')
+        return textResult(formatAwsConfig(project))
       }
     },
     {

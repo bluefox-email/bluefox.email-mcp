@@ -17,20 +17,67 @@ describe('manage_sending_setup - domains', () => {
     expect(result.content[0].text).toBe('No domains have been added yet.')
   })
 
-  test('list summarizes domains with DKIM status', async () => {
+  test('list summarizes domains with full per-record DNS status', async () => {
     const { client, manageSendingSetup } = setup()
     client.get.mockResolvedValue({
       count: 2,
       items: [
-        { domain: 'example.com', region: 'us-east-1', observed: { dkim: { allOk: true } } },
-        { domain: 'other.com', region: 'us-east-1', observed: { dkim: { allOk: false } } }
+        {
+          _id: 'domain123',
+          domain: 'example.com',
+          region: 'us-east-1',
+          observed: { dkim: { allOk: true }, spf: { present: true }, dmarc: { present: true }, mx: { present: true }, allOk: true }
+        },
+        { _id: 'domain456', domain: 'other.com', region: 'us-east-1', observed: { dkim: { allOk: false } } }
       ]
     })
 
     const result = await manageSendingSetup.handler({ resource: 'domain', action: 'list' })
+    expect(result.content[0].text).toContain('2 domain(s):')
+    expect(result.content[0].text).toContain('"example.com" (id domain123, region us-east-1) - DKIM: verified, SPF: present, DMARC: present, MX: present. Overall: fully verified.')
+    expect(result.content[0].text).toContain('"other.com" (id domain456, region us-east-1) - DKIM: not verified, SPF: missing, DMARC: missing, MX: missing. Overall: not fully verified.')
+  })
+
+  test('get returns full per-record DNS status for a domain resolved by id', async () => {
+    const { client, manageSendingSetup } = setup()
+    client.get.mockResolvedValue({
+      _id: 'domain123',
+      domain: 'example.com',
+      region: 'us-east-1',
+      observed: { dkim: { allOk: true }, spf: { present: true }, dmarc: { present: false }, mx: { present: true }, allOk: false }
+    })
+
+    const result = await manageSendingSetup.handler({ resource: 'domain', action: 'get', domainId: 'domain123' })
+
+    expect(client.get).toHaveBeenCalledWith('/domains/domain123')
     expect(result.content[0].text).toBe(
-      '2 domain(s): example.com (us-east-1) - DKIM verified; other.com (us-east-1) - DKIM not verified.'
+      '"example.com" (id domain123, region us-east-1) - DKIM: verified, SPF: present, DMARC: missing, MX: present. Overall: not fully verified.'
     )
+  })
+
+  test('get reports a domain with no observed status at all as not verified', async () => {
+    const { client, manageSendingSetup } = setup()
+    client.get.mockResolvedValue({ _id: 'domain123', domain: 'example.com', region: 'us-east-1' })
+
+    const result = await manageSendingSetup.handler({ resource: 'domain', action: 'get', domainId: 'domain123' })
+    expect(result.content[0].text).toBe(
+      '"example.com" (id domain123, region us-east-1) - DKIM: not verified, SPF: missing, DMARC: missing, MX: missing. Overall: not fully verified.'
+    )
+  })
+
+  test('get resolves the domain by name before fetching its full detail', async () => {
+    const { client, manageSendingSetup } = setup()
+    client.get.mockImplementation(async path => {
+      if (path === '/domains') {
+        return { items: [{ _id: 'domain123', domain: 'example.com', region: 'us-east-1' }] }
+      }
+      return { _id: 'domain123', domain: 'example.com', region: 'us-east-1', observed: {} }
+    })
+
+    const result = await manageSendingSetup.handler({ resource: 'domain', action: 'get', domain: 'example.com' })
+
+    expect(client.get).toHaveBeenCalledWith('/domains/domain123')
+    expect(result.content[0].text).toContain('DKIM: not verified')
   })
 
   test('create adds a domain and surfaces the DNS records to set', async () => {
@@ -208,9 +255,9 @@ describe('manage_sending_setup - sender identities', () => {
     expect(result.content[0].text).toContain('1 sender identit(y/ies): hello@example.com [default].')
   })
 
-  test('create adds a sender identity', async () => {
+  test('create adds a sender identity and confirms the saved region and name', async () => {
     const { client, manageSendingSetup } = setup()
-    client.post.mockResolvedValue({ _id: 'sender123', email: 'hello@example.com' })
+    client.post.mockResolvedValue({ _id: 'sender123', email: 'hello@example.com', name: 'Support', region: 'us-east-1' })
 
     const result = await manageSendingSetup.handler({
       resource: 'sender_identity',
@@ -221,7 +268,50 @@ describe('manage_sending_setup - sender identities', () => {
     })
 
     expect(client.post).toHaveBeenCalledWith('/sender-identities', { email: 'hello@example.com', name: 'Support', region: 'us-east-1' })
-    expect(result.content[0].text).toBe('Added sender identity "hello@example.com" (id sender123).')
+    expect(result.content[0].text).toBe('Added sender identity: "hello@example.com" (Support) (id sender123, region us-east-1).')
+  })
+
+  test('get returns full detail for a sender identity resolved by id, marking it default when first', async () => {
+    const { client, manageSendingSetup } = setup()
+    client.get.mockResolvedValue({
+      items: [
+        { _id: 'sender123', email: 'hello@example.com', name: 'Support', region: 'us-east-1' },
+        { _id: 'sender456', email: 'sales@example.com', region: 'us-east-1' }
+      ]
+    })
+
+    const result = await manageSendingSetup.handler({ resource: 'sender_identity', action: 'get', senderIdentityId: 'sender123' })
+
+    expect(client.get).toHaveBeenCalledWith('/sender-identities')
+    expect(result.content[0].text).toBe('"hello@example.com" (Support) (id sender123, region us-east-1) [default].')
+  })
+
+  test('get returns full detail for a non-default sender identity resolved by email', async () => {
+    const { client, manageSendingSetup } = setup()
+    client.get.mockImplementation(async (path, opts) => {
+      if (opts?.filter) {
+        return { items: [{ _id: 'sender456', email: 'sales@example.com' }] }
+      }
+      return {
+        items: [
+          { _id: 'sender123', email: 'hello@example.com', region: 'us-east-1' },
+          { _id: 'sender456', email: 'sales@example.com', region: 'us-east-1' }
+        ]
+      }
+    })
+
+    const result = await manageSendingSetup.handler({ resource: 'sender_identity', action: 'get', senderIdentityEmail: 'sales@example.com' })
+
+    expect(client.get).toHaveBeenCalledWith('/sender-identities', { filter: { email: 'sales@example.com' } })
+    expect(result.content[0].text).toBe('"sales@example.com" (id sender456, region us-east-1).')
+  })
+
+  test('get rejects when the resolved sender identity id is no longer in the list', async () => {
+    const { client, manageSendingSetup } = setup()
+    client.get.mockResolvedValue({ items: [{ _id: 'sender123', email: 'hello@example.com' }] })
+
+    await expect(manageSendingSetup.handler({ resource: 'sender_identity', action: 'get', senderIdentityId: 'ghost' }))
+      .rejects.toThrow('No sender identity with id "ghost" found.')
   })
 
   test('delete removes a sender identity by id', async () => {

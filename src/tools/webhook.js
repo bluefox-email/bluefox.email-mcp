@@ -1,6 +1,11 @@
 import { z } from 'zod'
 import { textResult } from '../helpers/errors.js'
 
+function formatWebhook (webhook) {
+  const events = ['bounce', 'complaint', 'click', 'open', 'sent', 'failed', 'subscription'].filter(event => webhook[event])
+  return `Webhook: ${webhook.url} - events: ${events.join(', ') || 'none'}.`
+}
+
 export function createWebhookTools ({ client }) {
   return [
     {
@@ -27,8 +32,7 @@ export function createWebhookTools ({ client }) {
           if (!webhook) {
             return textResult('This project has no webhook configured.')
           }
-          const events = ['bounce', 'complaint', 'click', 'open', 'sent', 'failed', 'subscription'].filter(event => webhook[event])
-          return textResult(`Webhook: ${webhook.url} - events: ${events.join(', ') || 'none'}.`)
+          return textResult(formatWebhook(webhook))
         }
 
         if (args.action === 'set') {
@@ -43,7 +47,7 @@ export function createWebhookTools ({ client }) {
             failed: args.failed,
             subscription: args.subscription
           })
-          return textResult(`Webhook set to ${result.url}.`)
+          return textResult(`Set ${formatWebhook(result)}`)
         }
 
         await client.del('/webhook')
