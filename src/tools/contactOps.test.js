@@ -187,8 +187,8 @@ describe('export_contacts', () => {
 
   test('pages through all contacts and writes a CSV file', async () => {
     const { client, export_contacts: exportContacts } = setup()
-    const page1Items = Array.from({ length: 100 }, (_, i) => ({ email: `c${i}@example.com`, name: 'N', tags: ['vip'], _lists: ['Newsletter'], customFields: { plan: 'pro' } }))
-    const page2Items = [{ email: 'last@example.com', tags: [], _lists: [], customFields: {} }]
+    const page1Items = Array.from({ length: 100 }, (_, i) => ({ email: `c${i}@example.com`, name: 'N', tags: ['vip'], _lists: ['Newsletter'], plan: 'pro' }))
+    const page2Items = [{ email: 'last@example.com', tags: [], _lists: [] }]
     client.get
       .mockResolvedValueOnce({ count: 101, items: page1Items })
       .mockResolvedValueOnce({ count: 101, items: page2Items })
@@ -217,7 +217,7 @@ describe('export_contacts', () => {
 
   test('escapes values containing commas or quotes', async () => {
     const { client, export_contacts: exportContacts } = setup()
-    client.get.mockResolvedValue({ count: 1, items: [{ email: 'a@example.com', name: 'Smith, "Ada"', tags: [], _lists: [], customFields: {} }] })
+    client.get.mockResolvedValue({ count: 1, items: [{ email: 'a@example.com', name: 'Smith, "Ada"', tags: [], _lists: [] }] })
 
     await exportContacts.handler({})
 

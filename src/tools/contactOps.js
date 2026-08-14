@@ -3,6 +3,7 @@ import os from 'os'
 import path from 'path'
 import { z } from 'zod'
 import { textResult } from '../helpers/errors.js'
+import { extractCustomFields } from '../helpers/contactFields.js'
 
 const MAX_FAILURES_SHOWN = 10
 
@@ -161,14 +162,14 @@ export function createContactOpsTools ({ client, resolveIdOrRequired }) {
           return textResult('This project has no contacts to export.')
         }
 
-        const customFieldNames = [...new Set(rows.flatMap(row => Object.keys(row.customFields || {})))]
+        const customFieldNames = [...new Set(rows.flatMap(row => Object.keys(extractCustomFields(row))))]
         const fields = ['email', 'name', 'tags', '_lists', ...customFieldNames]
         const flatRows = rows.map(row => ({
           email: row.email,
           name: row.name,
           tags: (row.tags || []).join(';'),
           _lists: (row._lists || []).join(';'),
-          ...(row.customFields || {})
+          ...extractCustomFields(row)
         }))
 
         const filePath = path.join(os.tmpdir(), `bluefox-contacts-export-${Date.now()}.csv`)

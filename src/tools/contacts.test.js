@@ -65,6 +65,25 @@ describe('get_contact', () => {
     expect(result.content[0].text).toBe('a@example.com (Ada) - tags: vip - subscriber lists: Newsletter')
   })
 
+  test('includes custom field values, excluding built-in fields', async () => {
+    const { client, get_contact: getContact } = setup()
+    client.get.mockResolvedValue({
+      _id: 'contact123',
+      email: 'a@example.com',
+      name: 'Ada',
+      tags: [],
+      _lists: [],
+      plan: 'pro',
+      age: 32,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z'
+    })
+
+    const result = await getContact.handler({ email: 'a@example.com' })
+
+    expect(result.content[0].text).toBe('a@example.com (Ada) - tags: none - subscriber lists: none - custom fields: plan: pro, age: 32')
+  })
+
   test('formats a contact with no name, tags, or lists', async () => {
     const { client, get_contact: getContact } = setup()
     client.get.mockResolvedValue({ email: 'a@example.com' })

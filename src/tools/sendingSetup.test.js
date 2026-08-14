@@ -108,6 +108,76 @@ describe('manage_sending_setup - domains', () => {
     expect(client.del).toHaveBeenCalledWith('/domains/domain123')
     expect(result.content[0].text).toBe('Deleted the domain.')
   })
+
+  test('check_dns resolves the domain by name when no id is given, filtering server-side', async () => {
+    const { client, manageSendingSetup } = setup()
+    client.get.mockResolvedValue({ items: [{ _id: 'domain123', domain: 'example.com', region: 'us-east-1' }] })
+    client.post.mockResolvedValue({ domain: 'example.com', observed: { dkim: { allOk: true } } })
+
+    const result = await manageSendingSetup.handler({ resource: 'domain', action: 'check_dns', domain: 'example.com' })
+
+    expect(client.get).toHaveBeenCalledWith('/domains', { filter: { domain: 'example.com', region: undefined } })
+    expect(client.post).toHaveBeenCalledWith('/domains/domain123/check')
+    expect(result.content[0].text).toBe('Domain "example.com" DKIM is now verified.')
+  })
+
+  test('check_dns resolves the domain by name and region, passing both as a server-side filter', async () => {
+    const { client, manageSendingSetup } = setup()
+    client.get.mockResolvedValue({ items: [{ _id: 'domain456', domain: 'example.com', region: 'eu-west-1' }] })
+    client.post.mockResolvedValue({ domain: 'example.com', observed: { dkim: { allOk: true } } })
+
+    await manageSendingSetup.handler({ resource: 'domain', action: 'check_dns', domain: 'example.com', region: 'eu-west-1' })
+
+    expect(client.get).toHaveBeenCalledWith('/domains', { filter: { domain: 'example.com', region: 'eu-west-1' } })
+    expect(client.post).toHaveBeenCalledWith('/domains/domain456/check')
+  })
+
+  test('delete resolves the domain by name', async () => {
+    const { client, manageSendingSetup } = setup()
+    client.get.mockResolvedValue({ items: [{ _id: 'domain123', domain: 'example.com', region: 'us-east-1' }] })
+    client.del.mockResolvedValue({ _id: 'domain123' })
+
+    await manageSendingSetup.handler({ resource: 'domain', action: 'delete', domain: 'example.com' })
+
+    expect(client.get).toHaveBeenCalledWith('/domains', { filter: { domain: 'example.com', region: undefined } })
+    expect(client.del).toHaveBeenCalledWith('/domains/domain123')
+  })
+
+  test('rejects resolving a domain with neither domainId nor domain given', async () => {
+    const { manageSendingSetup } = setup()
+
+    await expect(manageSendingSetup.handler({ resource: 'domain', action: 'check_dns' }))
+      .rejects.toThrow('Either domainId or domain is required.')
+  })
+
+  test('rejects when no domain matches the given name', async () => {
+    const { client, manageSendingSetup } = setup()
+    client.get.mockResolvedValue({ items: [] })
+
+    await expect(manageSendingSetup.handler({ resource: 'domain', action: 'check_dns', domain: 'ghost.com' }))
+      .rejects.toThrow('No domain "ghost.com" found.')
+  })
+
+  test('rejects when no domain matches the given name and region', async () => {
+    const { client, manageSendingSetup } = setup()
+    client.get.mockResolvedValue({ items: [] })
+
+    await expect(manageSendingSetup.handler({ resource: 'domain', action: 'check_dns', domain: 'ghost.com', region: 'us-east-1' }))
+      .rejects.toThrow('No domain "ghost.com" in region us-east-1 found.')
+  })
+
+  test('rejects when the domain name is ambiguous across regions', async () => {
+    const { client, manageSendingSetup } = setup()
+    client.get.mockResolvedValue({
+      items: [
+        { _id: 'domain123', domain: 'example.com', region: 'us-east-1' },
+        { _id: 'domain456', domain: 'example.com', region: 'eu-west-1' }
+      ]
+    })
+
+    await expect(manageSendingSetup.handler({ resource: 'domain', action: 'check_dns', domain: 'example.com' }))
+      .rejects.toThrow('Multiple domains named "example.com" exist across regions')
+  })
 })
 
 describe('manage_sending_setup - sender identities', () => {
@@ -172,6 +242,51 @@ describe('manage_sending_setup - sender identities', () => {
 
     expect(client.post).toHaveBeenCalledWith('/sender-identities/sender123/set-default')
     expect(result.content[0].text).toBe('"hello@example.com" is now the default sender identity.')
+  })
+
+  test('set_default resolves the sender identity by email when no id is given, filtering server-side', async () => {
+    const { client, manageSendingSetup } = setup()
+    client.get.mockResolvedValue({ items: [{ _id: 'sender123', email: 'hello@example.com' }] })
+    client.post.mockResolvedValue({ _id: 'sender123', email: 'hello@example.com' })
+
+    await manageSendingSetup.handler({ resource: 'sender_identity', action: 'set_default', senderIdentityEmail: 'hello@example.com' })
+
+    expect(client.get).toHaveBeenCalledWith('/sender-identities', { filter: { email: 'hello@example.com' } })
+    expect(client.post).toHaveBeenCalledWith('/sender-identities/sender123/set-default')
+  })
+
+  test('delete resolves the sender identity by email', async () => {
+    const { client, manageSendingSetup } = setup()
+    client.get.mockResolvedValue({ items: [{ _id: 'sender123', email: 'hello@example.com' }] })
+    client.del.mockResolvedValue({ _id: 'sender123' })
+
+    await manageSendingSetup.handler({ resource: 'sender_identity', action: 'delete', senderIdentityEmail: 'hello@example.com' })
+
+    expect(client.get).toHaveBeenCalledWith('/sender-identities', { filter: { email: 'hello@example.com' } })
+    expect(client.del).toHaveBeenCalledWith('/sender-identities/sender123')
+  })
+
+  test('rejects resolving a sender identity with neither senderIdentityId nor senderIdentityEmail given', async () => {
+    const { manageSendingSetup } = setup()
+
+    await expect(manageSendingSetup.handler({ resource: 'sender_identity', action: 'set_default' }))
+      .rejects.toThrow('Either senderIdentityId or senderIdentityEmail is required.')
+  })
+
+  test('rejects when no sender identity matches the given email', async () => {
+    const { client, manageSendingSetup } = setup()
+    client.get.mockResolvedValue({ items: [] })
+
+    await expect(manageSendingSetup.handler({ resource: 'sender_identity', action: 'set_default', senderIdentityEmail: 'ghost@example.com' }))
+      .rejects.toThrow('No sender identity with email "ghost@example.com" found.')
+  })
+
+  test('rejects when multiple sender identities share the given email', async () => {
+    const { client, manageSendingSetup } = setup()
+    client.get.mockResolvedValue({ items: [{ _id: 'a', email: 'hello@example.com' }, { _id: 'b', email: 'hello@example.com' }] })
+
+    await expect(manageSendingSetup.handler({ resource: 'sender_identity', action: 'set_default', senderIdentityEmail: 'hello@example.com' }))
+      .rejects.toThrow('Multiple sender identities have email "hello@example.com"')
   })
 })
 

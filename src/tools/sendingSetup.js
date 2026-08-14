@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { textResult } from '../helpers/errors.js'
+import { textResult, ResolveError } from '../helpers/errors.js'
 
 function formatDnsRecord (record) {
   return `${record.type} ${record.name} -> ${record.value}${record.priority ? ` (priority ${record.priority})` : ''}`
@@ -16,6 +16,45 @@ function formatRequiredDns (requiredDns) {
   return records.map(formatDnsRecord).join('\n')
 }
 
+// domains/sender-identities are small arrays embedded directly on the project - list()/get() never expose
+// their _id in any human-facing summary, so delete/check_dns/set_default need a way to find one by the
+// value a caller would actually have (the domain string, or the sender's email) instead of requiring an id
+// with no way to discover it first. Both list endpoints support filter[<field>]=value exact-match filtering
+// server-side, so this just asks for the match directly instead of fetching everything and filtering here.
+async function resolveDomainId (client, { domainId, domain, region }) {
+  if (domainId) {
+    return domainId
+  }
+  if (!domain) {
+    throw new ResolveError('Either domainId or domain is required.')
+  }
+  const list = await client.get('/domains', { filter: { domain, region } })
+  if (list.items.length === 0) {
+    throw new ResolveError(`No domain "${domain}"${region ? ` in region ${region}` : ''} found. Double-check the domain, or pass domainId if you already have it.`)
+  }
+  if (list.items.length > 1) {
+    throw new ResolveError(`Multiple domains named "${domain}" exist across regions - specify region or pass domainId instead.`)
+  }
+  return list.items[0]._id
+}
+
+async function resolveSenderIdentityId (client, { senderIdentityId, senderIdentityEmail }) {
+  if (senderIdentityId) {
+    return senderIdentityId
+  }
+  if (!senderIdentityEmail) {
+    throw new ResolveError('Either senderIdentityId or senderIdentityEmail is required.')
+  }
+  const list = await client.get('/sender-identities', { filter: { email: senderIdentityEmail } })
+  if (list.items.length === 0) {
+    throw new ResolveError(`No sender identity with email "${senderIdentityEmail}" found. Double-check the email, or pass senderIdentityId if you already have it.`)
+  }
+  if (list.items.length > 1) {
+    throw new ResolveError(`Multiple sender identities have email "${senderIdentityEmail}" - pass senderIdentityId instead.`)
+  }
+  return list.items[0]._id
+}
+
 export function createSendingSetupTools ({ client }) {
   return [
     {
@@ -26,11 +65,12 @@ export function createSendingSetupTools ({ client }) {
         inputSchema: {
           resource: z.enum(['domain', 'sender_identity', 'region']),
           action: z.enum(['list', 'create', 'delete', 'check_dns', 'set_default']).describe('check_dns is domain-only - re-checks DNS records and can auto-create a default sender identity once DKIM passes. set_default is sender_identity-only - moves it to the front of the list. Regions only support list.'),
-          domainId: z.string().optional().describe('Required for domain delete/check_dns.'),
-          senderIdentityId: z.string().optional().describe('Required for sender_identity delete/set_default.'),
-          domain: z.string().optional().describe('domain create only, e.g. "example.com".'),
-          region: z.string().optional().describe('Required for domain/sender_identity create - an AWS region this project is set up to send from. Use resource: "region", action: "list" to see valid values first.'),
+          domainId: z.string().optional().describe('For domain delete/check_dns - alternative to domain (list never exposes an id, so either works).'),
+          senderIdentityId: z.string().optional().describe('For sender_identity delete/set_default - alternative to senderIdentityEmail (list never exposes an id, so either works).'),
+          domain: z.string().optional().describe('domain create, or as an alternative to domainId for delete/check_dns - matched by exact domain string (plus region, if the same domain exists in more than one).'),
+          region: z.string().optional().describe('Required for domain/sender_identity create - an AWS region this project is set up to send from. Use resource: "region", action: "list" to see valid values first. Also used to disambiguate domain when resolving by name.'),
           email: z.string().optional().describe('sender_identity create only - the from-address to send as. Its domain must already be a verified domain in the given region.'),
+          senderIdentityEmail: z.string().optional().describe('For sender_identity delete/set_default, as an alternative to senderIdentityId - matched by exact email.'),
           name: z.string().optional().describe('sender_identity create only - a display name for the sender.')
         }
       },
@@ -72,7 +112,8 @@ export function createSendingSetupTools ({ client }) {
         }
 
         if (args.action === 'check_dns') {
-          const result = await client.post(`/domains/${args.domainId}/check`)
+          const domainId = await resolveDomainId(client, { domainId: args.domainId, domain: args.domain, region: args.region })
+          const result = await client.post(`/domains/${domainId}/check`)
           if (result.observed?.dkim?.allOk) {
             return textResult(`Domain "${result.domain}" DKIM is now verified.`)
           }
@@ -81,11 +122,14 @@ export function createSendingSetupTools ({ client }) {
         }
 
         if (args.action === 'set_default') {
-          const result = await client.post(`/sender-identities/${args.senderIdentityId}/set-default`)
+          const senderIdentityId = await resolveSenderIdentityId(client, { senderIdentityId: args.senderIdentityId, senderIdentityEmail: args.senderIdentityEmail })
+          const result = await client.post(`/sender-identities/${senderIdentityId}/set-default`)
           return textResult(`"${result.email}" is now the default sender identity.`)
         }
 
-        const id = args.resource === 'domain' ? args.domainId : args.senderIdentityId
+        const id = args.resource === 'domain'
+          ? await resolveDomainId(client, { domainId: args.domainId, domain: args.domain, region: args.region })
+          : await resolveSenderIdentityId(client, { senderIdentityId: args.senderIdentityId, senderIdentityEmail: args.senderIdentityEmail })
         await client.del(`${resourcePath}/${id}`)
         return textResult(args.resource === 'domain' ? 'Deleted the domain.' : 'Deleted the sender identity.')
       }

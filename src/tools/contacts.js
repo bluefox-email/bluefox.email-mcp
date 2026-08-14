@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { textResult } from '../helpers/errors.js'
+import { extractCustomFields } from '../helpers/contactFields.js'
 
 const customFieldsSchema = z.record(z.any()).optional().describe('Custom contact field values, keyed by field name (e.g. {"plan": "pro"}) - a name that is not already a registered custom field on this project is silently dropped, not an error.')
 
@@ -45,7 +46,7 @@ export function createContactTools ({ client }) {
       name: 'get_contact',
       config: {
         title: 'Get contact',
-        description: 'Looks up a contact by email, including which subscriber lists they belong to.',
+        description: 'Looks up a contact by email, including which subscriber lists they belong to and their custom field values.',
         inputSchema: {
           email: z.string()
         }
@@ -53,7 +54,11 @@ export function createContactTools ({ client }) {
       handler: async (args) => {
         const result = await client.get(`/contacts/${encodeURIComponent(args.email)}`)
         const lists = result._lists?.length ? result._lists.join(', ') : 'none'
-        return textResult(`${result.email}${result.name ? ` (${result.name})` : ''} - tags: ${(result.tags || []).join(', ') || 'none'} - subscriber lists: ${lists}`)
+        const customFields = extractCustomFields(result)
+        const customFieldsText = Object.keys(customFields).length
+          ? ` - custom fields: ${Object.entries(customFields).map(([key, value]) => `${key}: ${value}`).join(', ')}`
+          : ''
+        return textResult(`${result.email}${result.name ? ` (${result.name})` : ''} - tags: ${(result.tags || []).join(', ') || 'none'} - subscriber lists: ${lists}${customFieldsText}`)
       }
     },
     {

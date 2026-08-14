@@ -7,7 +7,11 @@ function formatSubscriber (item) {
   const status = item.status === 'paused' && item.pausedUntil
     ? `paused until ${new Date(item.pausedUntil).toISOString().slice(0, 10)}`
     : item.status
-  return `${item.email} (${status})`
+  const customFieldEntries = Object.entries(item.customFields || {})
+  const customFieldsText = customFieldEntries.length
+    ? ` - custom fields: ${customFieldEntries.map(([key, value]) => `${key}: ${value}`).join(', ')}`
+    : ''
+  return `${item.email} (${status})${customFieldsText}`
 }
 
 // These are the only tools that reach the flat /v1/subscriber-lists/{id}[...] endpoints (via the client's
