@@ -14,11 +14,6 @@ function formatSubscriber (item) {
   return `${item.email} (${status})${customFieldsText}`
 }
 
-// These are the only tools that reach the flat /v1/subscriber-lists/{id}[...] endpoints (via the client's
-// *Absolute methods) instead of the /v1/projectId/{projectId}/... ones every other tool uses - list membership
-// (who's on a list, and their per-list status) and subscribing/updating a contact within a specific list live
-// under that different, list-id-scoped path shape in the public API, not under subscriber-lists.js's CRUD-on-the-
-// list-itself routes or contacts.js's project-wide contact routes.
 export function createSubscriptionTools ({ client, resolveIdOrRequired }) {
   return [
     {
@@ -41,7 +36,7 @@ export function createSubscriptionTools ({ client, resolveIdOrRequired }) {
           filterField: 'name',
           label: 'subscriber list'
         })
-        const result = await client.getAbsolute(`/v1/subscriber-lists/${id}`, { limit: args.limit, skip: args.skip })
+        const result = await client.get(`/subscriber-lists/${id}/subscribers`, { limit: args.limit, skip: args.skip })
         if (result.count === 0) {
           return textResult('This list has no subscribers yet.')
         }
@@ -68,7 +63,7 @@ export function createSubscriptionTools ({ client, resolveIdOrRequired }) {
           filterField: 'name',
           label: 'subscriber list'
         })
-        const result = await client.getAbsolute(`/v1/subscriber-lists/${id}/${encodeURIComponent(args.email)}`)
+        const result = await client.get(`/subscriber-lists/${id}/subscribers/${encodeURIComponent(args.email)}`)
         return textResult(formatSubscriber(result))
       }
     },

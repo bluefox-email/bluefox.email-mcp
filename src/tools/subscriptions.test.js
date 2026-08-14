@@ -14,17 +14,17 @@ function setup () {
 describe('list_list_subscribers', () => {
   test('reports when the list has no subscribers', async () => {
     const { client, list_list_subscribers: listSubscribers } = setup()
-    client.getAbsolute.mockResolvedValue({ count: 0, items: [] })
+    client.get.mockResolvedValue({ count: 0, items: [] })
 
     const result = await listSubscribers.handler({ subscriberListId: 'list123' })
 
-    expect(client.getAbsolute).toHaveBeenCalledWith('/v1/subscriber-lists/list123', { limit: undefined, skip: undefined })
+    expect(client.get).toHaveBeenCalledWith('/subscriber-lists/list123/subscribers', { limit: undefined, skip: undefined })
     expect(result.content[0].text).toBe('This list has no subscribers yet.')
   })
 
   test('summarizes subscribers with their status, including a paused-until date', async () => {
     const { client, list_list_subscribers: listSubscribers } = setup()
-    client.getAbsolute.mockResolvedValue({
+    client.get.mockResolvedValue({
       count: 2,
       items: [
         { email: 'alice@example.com', status: 'active' },
@@ -38,18 +38,17 @@ describe('list_list_subscribers', () => {
 
   test('resolves the list by name and notes when more subscribers exist than were shown', async () => {
     const { client, list_list_subscribers: listSubscribers } = setup()
-    client.get.mockResolvedValue({ items: [{ _id: 'list123' }] })
-    client.getAbsolute.mockResolvedValue({ count: 5, items: [{ email: 'alice@example.com', status: 'active' }] })
+    client.get.mockResolvedValueOnce({ items: [{ _id: 'list123' }] }).mockResolvedValueOnce({ count: 5, items: [{ email: 'alice@example.com', status: 'active' }] })
 
     const result = await listSubscribers.handler({ subscriberListName: 'Newsletter', limit: 1 })
 
-    expect(client.getAbsolute).toHaveBeenCalledWith('/v1/subscriber-lists/list123', { limit: 1, skip: undefined })
+    expect(client.get).toHaveBeenCalledWith('/subscriber-lists/list123/subscribers', { limit: 1, skip: undefined })
     expect(result.content[0].text).toBe('5 subscriber(s): alice@example.com (active) (more not shown).')
   })
 
   test('includes each subscriber\'s custom field values', async () => {
     const { client, list_list_subscribers: listSubscribers } = setup()
-    client.getAbsolute.mockResolvedValue({
+    client.get.mockResolvedValue({
       count: 1,
       items: [{ email: 'alice@example.com', status: 'active', customFields: { plan: 'pro', age: 32 } }]
     })
@@ -63,17 +62,17 @@ describe('list_list_subscribers', () => {
 describe('get_list_subscriber', () => {
   test('reports a subscriber\'s status', async () => {
     const { client, get_list_subscriber: getSubscriber } = setup()
-    client.getAbsolute.mockResolvedValue({ email: 'alice@example.com', status: 'unsubscribed' })
+    client.get.mockResolvedValue({ email: 'alice@example.com', status: 'unsubscribed' })
 
     const result = await getSubscriber.handler({ subscriberListId: 'list123', email: 'alice@example.com' })
 
-    expect(client.getAbsolute).toHaveBeenCalledWith('/v1/subscriber-lists/list123/alice%40example.com')
+    expect(client.get).toHaveBeenCalledWith('/subscriber-lists/list123/subscribers/alice%40example.com')
     expect(result.content[0].text).toBe('alice@example.com (unsubscribed)')
   })
 
   test('includes the subscriber\'s custom field values', async () => {
     const { client, get_list_subscriber: getSubscriber } = setup()
-    client.getAbsolute.mockResolvedValue({ email: 'alice@example.com', status: 'active', customFields: { plan: 'pro' } })
+    client.get.mockResolvedValue({ email: 'alice@example.com', status: 'active', customFields: { plan: 'pro' } })
 
     const result = await getSubscriber.handler({ subscriberListId: 'list123', email: 'alice@example.com' })
 
