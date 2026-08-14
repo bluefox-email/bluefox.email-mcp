@@ -9,7 +9,10 @@ function formatAwsConfig (project) {
   const identities = awsConfig.senderIdentities?.length
     ? awsConfig.senderIdentities.map(identity => `${identity.name} <${identity.email}>${identity.region ? ` (${identity.region})` : ''}`).join(', ')
     : 'none'
-  return `AWS config for "${project.name}" (status: ${project.status}). Access key: ${awsConfig.accessKeyIdHint || 'none'}. Secret key: ${awsConfig.secretAccessKeyHint || 'none'}. STS role: ${awsConfig.roleArnHint || 'none'}. Region: ${awsConfig.region || 'none'}. Limit: ${awsConfig.limit ?? 'none'} sends/sec. Sender identities: ${identities}.`
+  const notByoAws = project.status !== 'byoAwsSes'
+    ? ` This project is not using BYO-AWS (status: ${project.status}) - it sends through bluefox.email's shared infrastructure, not its own AWS account. An empty config here is expected and is not something to set up unless you specifically want your own AWS account involved. To check or raise this project's limits on the shared infrastructure instead, use get_production_access_status / apply_for_production_access.`
+    : ''
+  return `AWS config for "${project.name}" (status: ${project.status}). Access key: ${awsConfig.accessKeyIdHint || 'none'}. Secret key: ${awsConfig.secretAccessKeyHint || 'none'}. STS role: ${awsConfig.roleArnHint || 'none'}. Region: ${awsConfig.region || 'none'}. Limit: ${awsConfig.limit ?? 'none'} sends/sec. Sender identities: ${identities}.${notByoAws}`
 }
 
 export function createProjectSetupTools ({ client }) {
@@ -72,6 +75,13 @@ export function createProjectSetupTools ({ client }) {
         }
       },
       handler: async (args) => {
+        const hasOverride = Object.keys(args).length > 0
+        if (!hasOverride) {
+          const project = await client.get('')
+          if (!project.awsConfig?.roleArn && !project.awsConfig?.accessKeyId) {
+            return textResult(`There's no AWS config stored to check - this project (status: ${project.status}) isn't set up for BYO-AWS. If that's intentional, use get_production_access_status instead to check its status on bluefox.email's shared infrastructure.`)
+          }
+        }
         await client.post('/aws-check', args)
         return textResult('AWS credentials check passed.')
       }

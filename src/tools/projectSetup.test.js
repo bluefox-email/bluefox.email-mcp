@@ -96,7 +96,7 @@ describe('get_aws_config', () => {
     expect(result.content[0].text).toContain('Support <support@example.com>')
   })
 
-  test('reports none/no config when nothing is set yet', async () => {
+  test('reports none/no config when nothing is set yet, and points to production access since the project is not BYO-AWS', async () => {
     const { client, get_aws_config: getAwsConfig } = setup()
     client.get.mockResolvedValue({ name: 'Project', status: 'sandbox' })
 
@@ -105,6 +105,17 @@ describe('get_aws_config', () => {
 
     expect(text).toContain('Access key: none')
     expect(text).toContain('Sender identities: none')
+    expect(text).toContain('This project is not using BYO-AWS (status: sandbox)')
+    expect(text).toContain('get_production_access_status / apply_for_production_access')
+  })
+
+  test('does not mention production access when the project is already byoAwsSes', async () => {
+    const { client, get_aws_config: getAwsConfig } = setup()
+    client.get.mockResolvedValue({ name: 'Project', status: 'byoAwsSes', awsConfig: { region: 'us-east-1' } })
+
+    const result = await getAwsConfig.handler({})
+
+    expect(result.content[0].text).not.toContain('not using BYO-AWS')
   })
 })
 
@@ -117,6 +128,38 @@ describe('check_aws_credentials', () => {
 
     expect(client.post).toHaveBeenCalledWith('/aws-check', { region: 'us-east-1' })
     expect(result.content[0].text).toBe('AWS credentials check passed.')
+  })
+
+  test('with no args and nothing stored, short-circuits with a clear explanation instead of a raw backend error', async () => {
+    const { client, check_aws_credentials: check } = setup()
+    client.get.mockResolvedValue({ status: 'sandbox' })
+
+    const result = await check.handler({})
+
+    expect(client.get).toHaveBeenCalledWith('')
+    expect(client.post).not.toHaveBeenCalled()
+    expect(result.content[0].text).toBe('There\'s no AWS config stored to check - this project (status: sandbox) isn\'t set up for BYO-AWS. If that\'s intentional, use get_production_access_status instead to check its status on bluefox.email\'s shared infrastructure.')
+  })
+
+  test('with no args but a stored role ARN, checks it against SES as normal', async () => {
+    const { client, check_aws_credentials: check } = setup()
+    client.get.mockResolvedValue({ status: 'byoAwsSes', awsConfig: { roleArn: 'encrypted' } })
+    client.post.mockResolvedValue({ success: true })
+
+    const result = await check.handler({})
+
+    expect(client.post).toHaveBeenCalledWith('/aws-check', {})
+    expect(result.content[0].text).toBe('AWS credentials check passed.')
+  })
+
+  test('with no args but stored static keys, checks them against SES as normal', async () => {
+    const { client, check_aws_credentials: check } = setup()
+    client.get.mockResolvedValue({ status: 'byoAwsSes', awsConfig: { accessKeyId: 'encrypted' } })
+    client.post.mockResolvedValue({ success: true })
+
+    await check.handler({})
+
+    expect(client.post).toHaveBeenCalledWith('/aws-check', {})
   })
 })
 
