@@ -41,6 +41,9 @@ function wantsSignupFormChange (args) {
 // the already-fetched current signupForm (or undefined on create, where there's nothing to preserve yet).
 function buildSignupFormBody (args, current = {}) {
   const signupForm = { ...current }
+  // signupForm is a Mongoose subdocument with its own auto _id - carrying that back gets rejected as an
+  // unexpected field, so it can't just be spread as-is.
+  delete signupForm._id
   for (const field of signupFormStyleFields) {
     if (args[field] !== undefined) {
       signupForm[field] = args[field]
@@ -205,7 +208,8 @@ export function createSubscriberListTools ({ client, resolveIdOptional, resolveI
             label: 'transactional email'
           })
           body.doubleOptIn = {
-            ...current.doubleOptIn,
+            // Not a spread of current.doubleOptIn - it's a Mongoose subdocument with its own auto _id, and
+            // sending that back gets rejected as an unexpected field. Every real field is assigned explicitly below.
             active: args.doubleOptInActive !== undefined ? args.doubleOptInActive : current.doubleOptIn?.active,
             emailId: emailId || current.doubleOptIn?.emailId,
             redirectLink: args.doubleOptInRedirectLink !== undefined ? args.doubleOptInRedirectLink : current.doubleOptIn?.redirectLink,

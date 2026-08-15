@@ -119,6 +119,20 @@ describe('update_subscriber_list', () => {
     expect(result.content[0].text).toBe('Updated subscriber list "New name".')
   })
 
+  test('never sends signupForm._id back - it is a Mongoose subdocument id, not a real field, and the API rejects it as unexpected', async () => {
+    const { client, update_subscriber_list: updateSubscriberList } = setup()
+    client.get.mockResolvedValue({
+      signupForm: { _id: 'subdoc123', formLayout: 'column', btnLabel: 'Subscribe', btnColor: '#123456' }
+    })
+    client.patch.mockResolvedValue({ name: 'Newsletter' })
+
+    await updateSubscriberList.handler({ subscriberListId: 'list123', btnLabel: 'Join now' })
+
+    expect(client.patch).toHaveBeenCalledWith('/subscriber-lists/list123', {
+      signupForm: { formLayout: 'column', btnLabel: 'Join now', btnColor: '#123456' }
+    })
+  })
+
   test('merges join-form style changes into the existing signupForm object instead of replacing it wholesale', async () => {
     const { client, update_subscriber_list: updateSubscriberList } = setup()
     client.get.mockResolvedValue({
@@ -139,6 +153,38 @@ describe('update_subscriber_list', () => {
         btnLabel: 'Join now',
         btnColor: '#123456',
         propertiesStyle: { company: { show: true }, firstName: { show: true } }
+      }
+    })
+  })
+
+  test('never sends doubleOptIn._id back - it is a Mongoose subdocument id, not a real field, and the API rejects it as unexpected', async () => {
+    const { client, update_subscriber_list: updateSubscriberList } = setup()
+    client.get.mockImplementation(async path => {
+      if (path === '/subscriber-lists') {
+        return { items: [{ _id: 'list123' }] }
+      }
+      return {
+        doubleOptIn: {
+          _id: 'subdoc123',
+          active: true,
+          emailId: 'oldEmail',
+          redirectLink: 'https://example.com/old',
+          confirmationTitle: 'Old title',
+          confirmationMessage: 'Old message'
+        }
+      }
+    })
+    client.patch.mockResolvedValue({ name: 'Newsletter' })
+
+    await updateSubscriberList.handler({ subscriberListName: 'Newsletter', confirmationTitle: 'New title' })
+
+    expect(client.patch).toHaveBeenCalledWith('/subscriber-lists/list123', {
+      doubleOptIn: {
+        active: true,
+        emailId: 'oldEmail',
+        redirectLink: 'https://example.com/old',
+        confirmationTitle: 'New title',
+        confirmationMessage: 'Old message'
       }
     })
   })

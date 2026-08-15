@@ -232,7 +232,8 @@ export function createSignUpFormTools ({ client, resolveId, resolveIdOptional, r
         if (wantsDoubleOptInChange) {
           const emailId = await resolveDoubleOptInEmailId(args)
           body.doubleOptIn = {
-            ...current.doubleOptIn,
+            // Not a spread of current.doubleOptIn - it's a Mongoose subdocument with its own auto _id, and
+            // sending that back gets rejected as an unexpected field. Every real field is assigned explicitly below.
             active: args.doubleOptInActive !== undefined ? args.doubleOptInActive : current.doubleOptIn?.active,
             emailId: emailId || current.doubleOptIn?.emailId,
             redirectLink: args.doubleOptInRedirectLink !== undefined ? args.doubleOptInRedirectLink : current.doubleOptIn?.redirectLink,

@@ -174,6 +174,33 @@ describe('update_signup_form', () => {
     })
   })
 
+  test('never sends doubleOptIn._id back - it is a Mongoose subdocument id, not a real field, and the API rejects it as unexpected', async () => {
+    const { client, update_signup_form: updateSignUpForm } = setup()
+    client.get.mockResolvedValue({
+      doubleOptIn: {
+        _id: 'subdoc123',
+        active: true,
+        emailId: 'oldEmail',
+        redirectLink: 'https://example.com/old',
+        confirmationTitle: 'Old title',
+        confirmationMessage: 'Old message'
+      }
+    })
+    client.patch.mockResolvedValue({ name: 'Newsletter form' })
+
+    await updateSignUpForm.handler({ signUpFormId: 'form123', confirmationTitle: 'New title' })
+
+    expect(client.patch).toHaveBeenCalledWith('/signup-forms/form123', {
+      doubleOptIn: {
+        active: true,
+        emailId: 'oldEmail',
+        redirectLink: 'https://example.com/old',
+        confirmationTitle: 'New title',
+        confirmationMessage: 'Old message'
+      }
+    })
+  })
+
   test('clears doubleOptInRedirectLink when explicitly given an empty string, instead of keeping the old value', async () => {
     const { client, update_signup_form: updateSignUpForm } = setup()
     client.get.mockResolvedValue({
