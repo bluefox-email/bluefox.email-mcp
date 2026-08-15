@@ -22,7 +22,7 @@ function formatEntries (entries) {
   }
   return entries.map(entry => {
     const value = entry.value && typeof entry.value === 'object' ? JSON.stringify(entry.value) : entry.value
-    return `${entry.name}${entry.main ? ' (main)' : ''}: ${value}${entry.overridden ? ' [overridden]' : ''}`
+    return `${entry.name}${entry.main ? ' (main)' : ''}: ${value}${entry.description ? ` - "${entry.description}"` : ''}${entry.overridden ? ' [overridden]' : ''}`
   }).join(', ')
 }
 

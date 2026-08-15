@@ -21,7 +21,7 @@ export function createTemplateTools ({ client, resolveIdOrRequired }) {
           name: z.string().optional().describe('create only, required - the new template\'s name.'),
           newName: z.string().optional().describe('update only.'),
           subject: z.string().optional().describe('create/update. On create, defaults to the source template\'s subject if omitted.'),
-          previewText: z.string().optional().describe('create/update. On create, defaults to the source template\'s previewText if omitted.'),
+          previewText: z.string().optional().describe('create/update. On create, defaults to the source template\'s previewText if omitted. On update, pass an empty string to clear it.'),
           tags: z.array(z.string()).optional().describe('create/update - replaces the whole tag list. On create, defaults to the source template\'s tags if omitted.'),
           onProjectCreation: z.enum(['do-nothing', 'set-as-transactional', 'set-as-triggered', 'set-as-campaign']).optional().describe('create/update. Whether new projects automatically get this template set as their default transactional/triggered/campaign email.')
         }
@@ -47,7 +47,7 @@ export function createTemplateTools ({ client, resolveIdOrRequired }) {
           const source = await client.get(`/templates/${sourceId}`)
           const body = {
             name: args.name,
-            subject: args.subject || source.subject,
+            subject: args.subject ?? source.subject,
             document: source.document,
             tags: args.tags || source.tags,
             previewText: args.previewText ?? source.previewText,

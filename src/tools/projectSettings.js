@@ -21,7 +21,7 @@ export function createProjectSettingsTools ({ client }) {
         inputSchema: {
           action: z.enum(['get', 'update']),
           name: z.string().optional().describe('update only.'),
-          logoUrl: z.string().optional().describe('update only.'),
+          logoUrl: z.string().optional().describe('update only. Pass an empty string to remove the logo.'),
           unengagedContactSegmentGroups: groupsSchema.optional().describe('update only. Replaces the whole "unengaged" segment definition.'),
           autoRemoveOnBounce: z.enum(['off', 'removeFromLists', 'deleteContact']).optional().describe('update only. Defaults to removeFromLists. "off" leaves the contact\'s subscriptions untouched, "removeFromLists" unsubscribes them from every list, "deleteContact" also deletes the contact entirely.'),
           autoRemoveOnComplaint: z.enum(['off', 'removeFromLists', 'deleteContact']).optional().describe('update only. Same modes as autoRemoveOnBounce, applied on a spam complaint instead.'),
@@ -44,7 +44,7 @@ export function createProjectSettingsTools ({ client }) {
         if (args.name) {
           body.name = args.name
         }
-        if (args.logoUrl) {
+        if (args.logoUrl !== undefined) {
           body.logoUrl = args.logoUrl
         }
         if (args.unengagedContactSegmentGroups) {

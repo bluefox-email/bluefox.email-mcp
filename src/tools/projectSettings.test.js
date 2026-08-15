@@ -95,6 +95,15 @@ describe('manage_project_settings', () => {
     })
   })
 
+  test('update clears logoUrl when explicitly given an empty string', async () => {
+    const { client, manageProjectSettings } = setup()
+    client.patch.mockResolvedValue({ name: 'My Project' })
+
+    await manageProjectSettings.handler({ action: 'update', logoUrl: '' })
+
+    expect(client.patch).toHaveBeenCalledWith('', { logoUrl: '' })
+  })
+
   test('update replaces the domain whitelist and echoes the resulting list', async () => {
     const { client, manageProjectSettings } = setup()
     client.patch.mockResolvedValue({ name: 'My Project', whiteList: ['example.com'] })

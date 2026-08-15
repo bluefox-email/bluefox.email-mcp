@@ -38,7 +38,7 @@ describe('manage_design_system', () => {
     expect(client.get).toHaveBeenCalledWith('/design-systems', { limit: 1 })
     expect(text).toContain('"Default" (id ds123)')
     expect(text).toContain('variables.colors: primary (main): #123456, secondary: #abcdef [overridden]')
-    expect(text).toContain('variables.fontStacks: heading: Roboto, sans-serif')
+    expect(text).toContain('variables.fontStacks: heading: Roboto, sans-serif - "Used for headings"')
     expect(text).toContain('variables.images: none')
     expect(text).toContain('font.stacks: body: Arial, sans-serif')
     expect(text).toContain('components.buttons: cta: {"backgroundColor":"#123456","borderRadius":"4px"}')
