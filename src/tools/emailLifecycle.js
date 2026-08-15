@@ -23,6 +23,11 @@ export function formatEmailDetail (type, detail, stats) {
     lines.push(`Preview text: "${detail.previewText}"`)
   }
   lines.push(`Content type: ${detail.type || 'chamaileon (visual editor)'}`)
+  if (typeof detail.document === 'string') {
+    lines.push(`Body:\n${detail.document}`)
+  } else if (detail.document) {
+    lines.push('Body: visual editor (Chamaileon) document - not shown as text, use the app to view/edit it.')
+  }
   if (type === 'campaign') {
     lines.push(`Status: ${detail.status}${detail.scheduledTo ? `, scheduled for ${detail.scheduledTo} (time zone: ${detail.timeZone || 'UTC'})` : ''}`)
     lines.push(`Subscriber list id: ${detail.subscriberListId || 'none'}`)
@@ -43,7 +48,10 @@ export function formatEmailDetail (type, detail, stats) {
     lines.push(`Exclude unengaged: ${detail.excludeUnengaged ? 'yes' : 'no'}`)
   }
   if (detail.feeds?.length) {
-    lines.push(`Feeds: ${detail.feeds.map(feed => feed.variableName || feed.url).join(', ')}`)
+    lines.push(`Feeds:\n${detail.feeds.map(feed =>
+      `- ${feed.variableName || '(no variableName)'}: ${feed.url} (${feed.feedType}), maxItems ${feed.maxItems ?? 'unlimited'}, ` +
+      `required: ${feed.required ? 'yes' : 'no'}${feed.availableFields?.length ? `, available fields: ${feed.availableFields.join(', ')}` : ''}`
+    ).join('\n')}`)
   }
   if (stats) {
     lines.push(`Stats: ${stats.sent} sent, ${stats.failed || 0} failed, ${stats.opens} opens (${stats.uniqueOpens} unique), ${stats.clicks} clicks (${stats.uniqueClicks} unique), ${stats.bounce} bounced, ${stats.complaint} complaints.`)

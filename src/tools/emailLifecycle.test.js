@@ -165,8 +165,9 @@ describe('get_email', () => {
           senderIdentity: 'sender123',
           replyTo: 'support@example.com',
           type: 'html',
+          document: '<p>Big discounts this week!</p>',
           excludeUnengaged: true,
-          feeds: [{ url: 'https://example.com/feed.xml', variableName: 'news' }]
+          feeds: [{ url: 'https://example.com/feed.xml', feedType: 'rss-xml', variableName: 'news', maxItems: 5, required: true, availableFields: ['title', 'link'] }]
         }
       }
       return { sent: 100, failed: 3, opens: 40, uniqueOpens: 35, clicks: 10, uniqueClicks: 8, bounce: 2, complaint: 0 }
@@ -178,17 +179,18 @@ describe('get_email', () => {
     expect(text).toContain('"Summer Sale" (id campaign123)')
     expect(text).toContain('Preview text: "Save big"')
     expect(text).toContain('Content type: html')
+    expect(text).toContain('Body:\n<p>Big discounts this week!</p>')
     expect(text).toContain('Status: scheduled, scheduled for 2026-08-01T08:00:00.000Z (time zone: UTC)')
     expect(text).toContain('Subscriber list id: list123')
     expect(text).toContain('Segment id: seg123')
     expect(text).toContain('Sender identity id: sender123')
     expect(text).toContain('Reply-to: support@example.com')
     expect(text).toContain('Exclude unengaged: yes')
-    expect(text).toContain('Feeds: news')
+    expect(text).toContain('- news: https://example.com/feed.xml (rss-xml), maxItems 5, required: yes, available fields: title, link')
     expect(text).toContain('Stats: 100 sent, 3 failed, 40 opens (35 unique), 10 clicks (8 unique), 2 bounced, 0 complaints.')
   })
 
-  test('defaults the time zone to UTC when scheduled without one, and falls back to the feed url when unnamed', async () => {
+  test('defaults the time zone to UTC when scheduled without one, and falls back to a "(no variableName)" placeholder and "unlimited"/"no" defaults on a bare feed', async () => {
     const { client, get_email: getEmail } = setup()
     client.get.mockImplementation(async path => {
       if (path === '/campaigns/campaign123') {
@@ -198,7 +200,7 @@ describe('get_email', () => {
           subject: 'Big discounts',
           status: 'scheduled',
           scheduledTo: '2026-08-01T08:00:00.000Z',
-          feeds: [{ url: 'https://example.com/feed.xml' }]
+          feeds: [{ url: 'https://example.com/feed.xml', feedType: 'json' }]
         }
       }
       return { sent: 0, opens: 0, uniqueOpens: 0, clicks: 0, uniqueClicks: 0, bounce: 0, complaint: 0 }
@@ -208,10 +210,10 @@ describe('get_email', () => {
     const text = result.content[0].text
 
     expect(text).toContain('(time zone: UTC)')
-    expect(text).toContain('Feeds: https://example.com/feed.xml')
+    expect(text).toContain('- (no variableName): https://example.com/feed.xml (json), maxItems unlimited, required: no')
   })
 
-  test('returns minimal detail for a transactional email with no optional fields set', async () => {
+  test('returns minimal detail for a transactional email with no optional fields set, and no Body line when there is no document', async () => {
     const { client, get_email: getEmail } = setup()
     client.get.mockImplementation(async path => {
       if (path === '/transactional-emails/email123') {
@@ -224,9 +226,25 @@ describe('get_email', () => {
     const text = result.content[0].text
 
     expect(text).toContain('Content type: chamaileon (visual editor)')
+    expect(text).not.toContain('Body:')
     expect(text).not.toContain('Exclude unengaged')
     expect(text).not.toContain('Status:')
     expect(text).toContain('Stats: 0 sent, 0 failed')
+  })
+
+  test('notes a visual-editor (Chamaileon) document instead of dumping raw JSON', async () => {
+    const { client, get_email: getEmail } = setup()
+    client.get.mockImplementation(async path => {
+      if (path === '/transactional-emails/email123') {
+        return { _id: 'email123', name: 'Order Confirmation', subject: 'Your order', document: { body: { children: [] } } }
+      }
+      return { sent: 0, opens: 0, uniqueOpens: 0, clicks: 0, uniqueClicks: 0, bounce: 0, complaint: 0 }
+    })
+
+    const result = await getEmail.handler({ type: 'transactional', emailId: 'email123' })
+    const text = result.content[0].text
+
+    expect(text).toContain('Body: visual editor (Chamaileon) document - not shown as text, use the app to view/edit it.')
   })
 
   test('resolves by name when getting a single email', async () => {
