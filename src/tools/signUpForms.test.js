@@ -174,6 +174,37 @@ describe('update_signup_form', () => {
     })
   })
 
+  test('clears doubleOptInRedirectLink when explicitly given an empty string, instead of keeping the old value', async () => {
+    const { client, update_signup_form: updateSignUpForm } = setup()
+    client.get.mockResolvedValue({
+      doubleOptIn: {
+        active: true,
+        emailId: 'oldEmail',
+        redirectLink: 'https://example.com/old',
+        confirmationTitle: 'Old title',
+        confirmationMessage: 'Old message'
+      }
+    })
+    client.patch.mockResolvedValue({ name: 'Newsletter form' })
+
+    await updateSignUpForm.handler({
+      signUpFormId: 'form123',
+      doubleOptInRedirectLink: '',
+      confirmationTitle: 'You\'re confirmed!',
+      confirmationMessage: 'Thanks for confirming your subscription.'
+    })
+
+    expect(client.patch).toHaveBeenCalledWith('/signup-forms/form123', {
+      doubleOptIn: {
+        active: true,
+        emailId: 'oldEmail',
+        redirectLink: '',
+        confirmationTitle: 'You\'re confirmed!',
+        confirmationMessage: 'Thanks for confirming your subscription.'
+      }
+    })
+  })
+
   test('overrides every doubleOptIn field when all are given, instead of falling back to current', async () => {
     const { client, update_signup_form: updateSignUpForm } = setup()
     client.get.mockImplementation(async path => {

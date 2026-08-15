@@ -155,9 +155,9 @@ export function createSubscriberListTools ({ client, resolveIdOptional, resolveI
           doubleOptInActive: z.boolean().optional().describe('The referenced transactional email\'s body MUST contain {{verifyLink}} - the API rejects enabling this otherwise.'),
           doubleOptInTransactionalEmailId: z.string().optional().describe('Its body must include {{verifyLink}}.'),
           doubleOptInTransactionalEmailName: z.string().optional().describe('Looked up automatically. Its body must include {{verifyLink}}.'),
-          doubleOptInRedirectLink: z.string().optional(),
-          confirmationTitle: z.string().optional(),
-          confirmationMessage: z.string().optional(),
+          doubleOptInRedirectLink: z.string().optional().describe('On update, pass an empty string to clear it and fall back to showing the confirmation title/message instead of redirecting.'),
+          confirmationTitle: z.string().optional().describe('On update, pass an empty string to clear it.'),
+          confirmationMessage: z.string().optional().describe('On update, pass an empty string to clear it.'),
           ...signupFormSchema
         }
       },
@@ -184,9 +184,9 @@ export function createSubscriberListTools ({ client, resolveIdOptional, resolveI
         const wantsDoubleOptInChange = args.doubleOptInActive !== undefined ||
           args.doubleOptInTransactionalEmailId ||
           args.doubleOptInTransactionalEmailName ||
-          args.doubleOptInRedirectLink ||
-          args.confirmationTitle ||
-          args.confirmationMessage
+          args.doubleOptInRedirectLink !== undefined ||
+          args.confirmationTitle !== undefined ||
+          args.confirmationMessage !== undefined
         const signupFormChange = wantsSignupFormChange(args)
 
         // doubleOptIn/signupForm are nested objects the API replaces wholesale when given, not deep-merged -
@@ -208,9 +208,9 @@ export function createSubscriberListTools ({ client, resolveIdOptional, resolveI
             ...current.doubleOptIn,
             active: args.doubleOptInActive !== undefined ? args.doubleOptInActive : current.doubleOptIn?.active,
             emailId: emailId || current.doubleOptIn?.emailId,
-            redirectLink: args.doubleOptInRedirectLink || current.doubleOptIn?.redirectLink,
-            confirmationTitle: args.confirmationTitle || current.doubleOptIn?.confirmationTitle,
-            confirmationMessage: args.confirmationMessage || current.doubleOptIn?.confirmationMessage
+            redirectLink: args.doubleOptInRedirectLink !== undefined ? args.doubleOptInRedirectLink : current.doubleOptIn?.redirectLink,
+            confirmationTitle: args.confirmationTitle !== undefined ? args.confirmationTitle : current.doubleOptIn?.confirmationTitle,
+            confirmationMessage: args.confirmationMessage !== undefined ? args.confirmationMessage : current.doubleOptIn?.confirmationMessage
           }
         }
 

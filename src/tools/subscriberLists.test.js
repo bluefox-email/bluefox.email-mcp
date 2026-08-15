@@ -198,6 +198,42 @@ describe('update_subscriber_list', () => {
     })
   })
 
+  test('clears doubleOptInRedirectLink when explicitly given an empty string, instead of keeping the old value', async () => {
+    const { client, update_subscriber_list: updateSubscriberList } = setup()
+    client.get.mockImplementation(async path => {
+      if (path === '/subscriber-lists') {
+        return { items: [{ _id: 'list123' }] }
+      }
+      return {
+        doubleOptIn: {
+          active: true,
+          emailId: 'oldEmail',
+          redirectLink: 'https://example.com/old',
+          confirmationTitle: 'Old title',
+          confirmationMessage: 'Old message'
+        }
+      }
+    })
+    client.patch.mockResolvedValue({ name: 'Newsletter' })
+
+    await updateSubscriberList.handler({
+      subscriberListName: 'Newsletter',
+      doubleOptInRedirectLink: '',
+      confirmationTitle: 'You\'re confirmed!',
+      confirmationMessage: 'Thanks for confirming your subscription.'
+    })
+
+    expect(client.patch).toHaveBeenCalledWith('/subscriber-lists/list123', {
+      doubleOptIn: {
+        active: true,
+        emailId: 'oldEmail',
+        redirectLink: '',
+        confirmationTitle: 'You\'re confirmed!',
+        confirmationMessage: 'Thanks for confirming your subscription.'
+      }
+    })
+  })
+
   test('overrides every doubleOptIn field when all are given, instead of falling back to current', async () => {
     const { client, update_subscriber_list: updateSubscriberList } = setup()
     client.get.mockImplementation(async path => {

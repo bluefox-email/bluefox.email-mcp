@@ -55,9 +55,9 @@ const doubleOptInSchema = {
   doubleOptInActive: z.boolean().optional().describe('The referenced transactional email\'s body MUST contain {{verifyLink}} - the API rejects enabling this otherwise, since that\'s the only way a contact can confirm.'),
   doubleOptInTransactionalEmailId: z.string().optional().describe('Its body must include {{verifyLink}}.'),
   doubleOptInTransactionalEmailName: z.string().optional().describe('The transactional email that sends the confirmation message, by name - looked up automatically. Required (id or name) if doubleOptInActive is true. Its body must include {{verifyLink}}.'),
-  doubleOptInRedirectLink: z.string().optional().describe('Where to send the contact after they click the confirmation link in their email and their subscription becomes verified. Only relevant when double opt-in is active. This is a DIFFERENT field from the top-level redirectLink above - that one is the general post-signup redirect, used before/without confirmation. Setting this alone does NOT change where visitors land right after submitting the form.'),
-  confirmationTitle: z.string().optional(),
-  confirmationMessage: z.string().optional()
+  doubleOptInRedirectLink: z.string().optional().describe('Where to send the contact after they click the confirmation link in their email and their subscription becomes verified. Only relevant when double opt-in is active. This is a DIFFERENT field from the top-level redirectLink above - that one is the general post-signup redirect, used before/without confirmation. Setting this alone does NOT change where visitors land right after submitting the form. On update, pass an empty string to clear it and fall back to showing the confirmation title/message instead of redirecting.'),
+  confirmationTitle: z.string().optional().describe('On update, pass an empty string to clear it.'),
+  confirmationMessage: z.string().optional().describe('On update, pass an empty string to clear it.')
 }
 
 function buildStyleBody (args) {
@@ -217,9 +217,9 @@ export function createSignUpFormTools ({ client, resolveId, resolveIdOptional, r
         const wantsDoubleOptInChange = args.doubleOptInActive !== undefined ||
           args.doubleOptInTransactionalEmailId ||
           args.doubleOptInTransactionalEmailName ||
-          args.doubleOptInRedirectLink ||
-          args.confirmationTitle ||
-          args.confirmationMessage
+          args.doubleOptInRedirectLink !== undefined ||
+          args.confirmationTitle !== undefined ||
+          args.confirmationMessage !== undefined
         const wantsContactFieldsChange = args.contactFields?.length > 0
 
         // doubleOptIn and propertiesStyle are nested objects the API replaces wholesale when given, not
@@ -235,9 +235,9 @@ export function createSignUpFormTools ({ client, resolveId, resolveIdOptional, r
             ...current.doubleOptIn,
             active: args.doubleOptInActive !== undefined ? args.doubleOptInActive : current.doubleOptIn?.active,
             emailId: emailId || current.doubleOptIn?.emailId,
-            redirectLink: args.doubleOptInRedirectLink || current.doubleOptIn?.redirectLink,
-            confirmationTitle: args.confirmationTitle || current.doubleOptIn?.confirmationTitle,
-            confirmationMessage: args.confirmationMessage || current.doubleOptIn?.confirmationMessage
+            redirectLink: args.doubleOptInRedirectLink !== undefined ? args.doubleOptInRedirectLink : current.doubleOptIn?.redirectLink,
+            confirmationTitle: args.confirmationTitle !== undefined ? args.confirmationTitle : current.doubleOptIn?.confirmationTitle,
+            confirmationMessage: args.confirmationMessage !== undefined ? args.confirmationMessage : current.doubleOptIn?.confirmationMessage
           }
         }
 
