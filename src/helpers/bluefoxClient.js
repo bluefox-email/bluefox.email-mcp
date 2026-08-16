@@ -65,6 +65,7 @@ export function createBluefoxClient ({ baseUrl, projectId, apiKey }) {
   return {
     get: (path, query) => request('GET', path, { query }),
     post: (path, body) => request('POST', path, { body }),
+    put: (path, body) => request('PUT', path, { body }),
     patch: (path, body) => request('PATCH', path, { body }),
     del: path => request('DELETE', path),
     getAbsolute: (path, query) => request('GET', path, { query, absolute: true }),
