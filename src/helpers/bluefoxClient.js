@@ -23,9 +23,7 @@ function buildQueryString (query) {
   return qs ? `?${qs}` : ''
 }
 
-// Thin wrapper around fetch, the only place that builds bluefox.email URLs and attaches auth. Every public
-// API route this client calls lives under /v1/projectId/{projectId}{path} - never a legacy flat/unscoped
-// route, so there is no way to reach anything outside the current project.
+// Thin wrapper around fetch, the only place that builds bluefox.email URLs and attaches auth.
 export function createBluefoxClient ({ baseUrl, projectId, apiKey }) {
   async function request (method, path, { query, body } = {}) {
     const url = `${baseUrl}/v1/projectId/${projectId}${path}${buildQueryString(query)}`
