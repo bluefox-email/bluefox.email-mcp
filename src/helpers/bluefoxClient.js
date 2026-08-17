@@ -23,14 +23,12 @@ function buildQueryString (query) {
   return qs ? `?${qs}` : ''
 }
 
-// Thin wrapper around fetch, the only place that builds bluefox.email URLs and attaches auth. Most of the public
-// API lives under /v1/projectId/{projectId}{path}, but a handful of subscriber-list-membership endpoints
-// (listing/subscribing/updating a single subscriber) are flat routes instead - e.g. /v1/subscriber-lists/{id} -
-// scoped by the list id itself rather than the project id in the URL. The *Absolute variants below call `path`
-// as a full path (still against the same baseUrl and with the same auth), unprefixed, for those.
+// Thin wrapper around fetch, the only place that builds bluefox.email URLs and attaches auth. Every public
+// API route this client calls lives under /v1/projectId/{projectId}{path} - never a legacy flat/unscoped
+// route, so there is no way to reach anything outside the current project.
 export function createBluefoxClient ({ baseUrl, projectId, apiKey }) {
-  async function request (method, path, { query, body, absolute } = {}) {
-    const url = `${baseUrl}${absolute ? '' : `/v1/projectId/${projectId}`}${path}${buildQueryString(query)}`
+  async function request (method, path, { query, body } = {}) {
+    const url = `${baseUrl}/v1/projectId/${projectId}${path}${buildQueryString(query)}`
     const res = await fetch(url, {
       method,
       headers: {
@@ -67,9 +65,6 @@ export function createBluefoxClient ({ baseUrl, projectId, apiKey }) {
     post: (path, body) => request('POST', path, { body }),
     patch: (path, body) => request('PATCH', path, { body }),
     del: path => request('DELETE', path),
-    getAbsolute: (path, query) => request('GET', path, { query, absolute: true }),
-    postAbsolute: (path, body) => request('POST', path, { body, absolute: true }),
-    patchAbsolute: (path, body) => request('PATCH', path, { body, absolute: true }),
     getText: (path, query) => requestText(path, { query })
   }
 }

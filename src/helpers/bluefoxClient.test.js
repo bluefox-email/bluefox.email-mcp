@@ -97,36 +97,6 @@ describe('createBluefoxClient', () => {
     await expect(client.get('/campaigns')).rejects.toThrow('Missing required field: name')
   })
 
-  test('getAbsolute() calls the given path directly, without the /v1/projectId/{id} prefix', async () => {
-    const fetchSpy = mockFetchOnce(200, { status: 200, result: { items: [], count: 0 } })
-    await client.getAbsolute('/subscriber-lists/list123')
-
-    expect(fetchSpy).toHaveBeenCalledWith(
-      'https://api.bluefox.email/subscriber-lists/list123',
-      expect.objectContaining({ method: 'GET' })
-    )
-  })
-
-  test('postAbsolute() sends a JSON body to the given path directly', async () => {
-    const fetchSpy = mockFetchOnce(201, { status: 201, result: { email: 'a@example.com' } })
-    await client.postAbsolute('/subscriber-lists/list123', { email: 'a@example.com' })
-
-    expect(fetchSpy).toHaveBeenCalledWith(
-      'https://api.bluefox.email/subscriber-lists/list123',
-      expect.objectContaining({ method: 'POST', body: JSON.stringify({ email: 'a@example.com' }) })
-    )
-  })
-
-  test('patchAbsolute() uses the PATCH method against the given path directly', async () => {
-    const fetchSpy = mockFetchOnce(200, { status: 200, result: {} })
-    await client.patchAbsolute('/subscriber-lists/list123/a@example.com', { status: 'paused' })
-
-    expect(fetchSpy).toHaveBeenCalledWith(
-      'https://api.bluefox.email/subscriber-lists/list123/a@example.com',
-      expect.objectContaining({ method: 'PATCH' })
-    )
-  })
-
   test('handles a response body that fails to parse as JSON', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
       ok: false,

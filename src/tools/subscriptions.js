@@ -112,7 +112,7 @@ export function createSubscriptionTools ({ client, resolveIdOrRequired }) {
         if (args.status) {
           body.status = args.status
         }
-        const result = await client.postAbsolute(`/v1/subscriber-lists/${id}`, body)
+        const result = await client.post(`/subscriber-lists/${id}/subscribers`, body)
         return textResult(`Subscribed ${result.email} to the list (status: ${result.status}).`)
       }
     },
@@ -157,7 +157,7 @@ export function createSubscriptionTools ({ client, resolveIdOrRequired }) {
         if (args.pausedUntil) {
           body.pausedUntil = args.pausedUntil
         }
-        const result = await client.patchAbsolute(`/v1/subscriber-lists/${id}/${encodeURIComponent(args.email)}`, body)
+        const result = await client.patch(`/subscriber-lists/${id}/subscribers/${encodeURIComponent(args.email)}`, body)
         return textResult(`Updated ${result.email} on the list (status: ${result.status}).`)
       }
     }

@@ -74,22 +74,22 @@ describe('bulk_update_contacts', () => {
 
   test('subscribes to a list resolved by id', async () => {
     const { client, bulk_update_contacts: bulkUpdate } = setup()
-    client.postAbsolute.mockResolvedValue({})
+    client.post.mockResolvedValue({})
 
     const result = await bulkUpdate.handler({ emails: ['a@example.com'], action: 'subscribe_to_list', subscriberListId: 'list1' })
 
-    expect(client.postAbsolute).toHaveBeenCalledWith('/v1/subscriber-lists/list1', { email: 'a@example.com' })
+    expect(client.post).toHaveBeenCalledWith('/subscriber-lists/list1/subscribers', { email: 'a@example.com' })
     expect(result.content[0].text).toBe('Subscribed 1/1 contact(s).')
   })
 
   test('unsubscribes from a list resolved by name', async () => {
     const { client, bulk_update_contacts: bulkUpdate } = setup()
     client.get.mockResolvedValue({ count: 1, items: [{ _id: 'list1' }] })
-    client.patchAbsolute.mockResolvedValue({})
+    client.patch.mockResolvedValue({})
 
     const result = await bulkUpdate.handler({ emails: ['a@example.com'], action: 'unsubscribe_from_list', subscriberListName: 'Newsletter' })
 
-    expect(client.patchAbsolute).toHaveBeenCalledWith('/v1/subscriber-lists/list1/a%40example.com', { status: 'unsubscribed' })
+    expect(client.patch).toHaveBeenCalledWith('/subscriber-lists/list1/subscribers/a%40example.com', { status: 'unsubscribed' })
     expect(result.content[0].text).toBe('Unsubscribed 1/1 contact(s).')
   })
 

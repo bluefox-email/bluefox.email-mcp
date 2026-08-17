@@ -94,10 +94,10 @@ export function createContactOpsTools ({ client, resolveIdOrRequired }) {
           action = email => client.post('/suppression-list', { email })
         } else if (args.action === 'subscribe_to_list') {
           verb = 'Subscribed'
-          action = email => client.postAbsolute(`/v1/subscriber-lists/${listId}`, { email })
+          action = email => client.post(`/subscriber-lists/${listId}/subscribers`, { email })
         } else {
           verb = 'Unsubscribed'
-          action = email => client.patchAbsolute(`/v1/subscriber-lists/${listId}/${encodeURIComponent(email)}`, { status: 'unsubscribed' })
+          action = email => client.patch(`/subscriber-lists/${listId}/subscribers/${encodeURIComponent(email)}`, { status: 'unsubscribed' })
         }
 
         const { succeeded, failures } = await runPerContact(args.emails, action)
