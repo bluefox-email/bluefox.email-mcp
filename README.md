@@ -216,8 +216,6 @@ and look up your real options (like your actual subscriber lists) instead of ask
 
 ## Limitations
 
-- **Sandbox projects** can only send to verified email addresses - a bluefox.email account restriction, not
-  something this server changes.
 - **No date-range filtering** on list tools - "campaigns from this month" relies on the agent filtering the
   returned list itself, since the API only supports exact-match filters.
 - **Templates** can be listed, renamed, or have their subject/preview text/tags updated, and a new one can be
