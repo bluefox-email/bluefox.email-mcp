@@ -182,14 +182,14 @@ of connecting in a broken state.
 | Tool | What it does |
 |---|---|
 | `manage_segment` | List/create/get/update/delete segments (contact-property and engagement conditions). |
-| `manage_project_settings` | Get/update the project's name, logo, and "unengaged contact" definition. |
+| `manage_project_settings` | Get/update the project's name, logo, "unengaged contact" definition, auto-remove-on-bounce/complaint behavior, and domain whitelist. |
 | `manage_design_system` | Get the project's design system, or set/reset style overrides (colors, fonts, button/text/divider styles). |
 | `manage_sending_setup` | List/add/remove/check sending domains and sender identities. |
 | `manage_webhook` | Get/set/remove the project's webhook. |
 | `test_webhook` | Fire a synthetic event at the project's configured webhook URL to confirm it's reachable and signed correctly. |
 | `manage_contact_fields_and_tags` | Manage custom contact field definitions and contact tags. |
 | `manage_suppression_list` | List/add/remove entries on this project's suppression list. |
-| `manage_templates` | List/get/rename/delete templates (metadata only - can't author template content, see Limitations). |
+| `manage_templates` | List/get/rename/delete templates, or create one by duplicating an existing template's content (metadata only - can't author template content from scratch, see Limitations). |
 
 ### Production access and sending limits
 
@@ -220,12 +220,12 @@ and look up your real options (like your actual subscriber lists) instead of ask
   something this server changes.
 - **No date-range filtering** on list tools - "campaigns from this month" relies on the agent filtering the
   returned list itself, since the API only supports exact-match filters.
-- **Templates** can be listed, renamed, or have their subject/preview text/tags updated, but this tool cannot
-  author or edit a template's actual visual content, and can't create an email directly from a saved template -
-  those only accept plain html/text content.
-- **No transactional email delete** - `delete_email` only supports campaigns and triggered emails.
-- **API keys and the domain whitelist** can't be read or changed through this server - manage those from Project
-  Settings in the app.
+- **Templates** can be listed, renamed, or have their subject/preview text/tags updated, and a new one can be
+  created by duplicating an existing template's visual content - but this tool cannot author or edit that visual
+  content from scratch, and can't create an email directly from a saved template - those only accept plain
+  html/text content.
+- **API keys** can't be read or changed through this server - manage those from Project Settings in the app. (The
+  domain whitelist can be changed, via `manage_project_settings`.)
 - **Webhook `secretKey`** must match one of the project's existing API keys, which this server can't look up for
   you - get it from Project Settings > API Keys & Domain Whitelist.
 
