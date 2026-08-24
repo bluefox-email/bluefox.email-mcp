@@ -1,0 +1,30 @@
+{
+  "name": "bluefox.email-mcp",
+  "version": "0.0.1",
+  "description": "Local MCP server wrapping the bluefox.email public API as tools for AI agents (Claude Desktop, Claude Code).",
+  "type": "module",
+  "bin": {
+    "bluefox.email-mcp": "./src/index.js"
+  },
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "lint": "npx standard",
+    "lint-fix": "npx standard --fix",
+    "test": "npx vitest run --coverage -- --check-coverage --lines 100 --functions 100 --branches 100 --statements 100"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^1.6.0",
+    "standard": "^17.1.0",
+    "vitest": "^1.6.0"
+  },
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gyulanemeth/bluefox.email-mcp.git"
+  }
+}
