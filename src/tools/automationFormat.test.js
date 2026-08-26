@@ -107,13 +107,16 @@ describe('formatAutomationDetail', () => {
         { _id: 'n11b', type: 'webhook' },
         { _id: 'n12', type: 'complete' },
         { _id: 'n13', type: 'mystery-node' },
+        { _id: 'n13b', type: 'delay', duration: 1, durationType: 'day', pendingDeletion: true },
+        { _id: 'n13c', type: 'send-email', emailId: 'email3', emailDeleted: true },
         {
           _id: 'n14',
           type: 'branch',
           branches: [
             { _id: 'b1', condition: { segmentId: 'seg1' }, sequence: [{ _id: 'n15', type: 'complete' }] },
             { _id: 'b2', condition: {}, sequence: [] },
-            { _id: 'b3', sequence: [] }
+            { _id: 'b3', sequence: [] },
+            { _id: 'b4', pendingDeletion: true, sequence: [] }
           ]
         }
       ]
@@ -144,6 +147,9 @@ describe('formatAutomationDetail', () => {
     expect(text).toContain('Branch 1 (id b1) if in segment seg1:')
     expect(text).toContain('Branch 2 (id b2) if any:')
     expect(text).toContain('Branch 3 (id b3) if any:')
+    expect(text).toContain('- [delay] (id n13b) Wait 1 day(s) [PENDING DELETION - will be removed once this draft is merged]')
+    expect(text).toContain('- [send-email] (id n13c) Send email (emailId email3) [PENDING DELETION - will be removed once this draft is merged]')
+    expect(text).toContain('Branch 4 (id b4) [PENDING DELETION] if any:')
   })
 
   test('reports pending draft trigger, exit criteria, and sequence', () => {

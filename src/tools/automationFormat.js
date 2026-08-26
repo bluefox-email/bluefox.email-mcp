@@ -89,10 +89,11 @@ function formatSequence (sequence, indent) {
   }
   return sequence.map(node => {
     const errors = node.error?.length ? ` ⚠ ${node.error.join('; ')}` : ''
-    let line = `${pad}- [${node.type}] (id ${node._id}) ${formatNodeSummary(node)}${errors}`
+    const pendingDeletion = (node.pendingDeletion || node.emailDeleted) ? ' [PENDING DELETION - will be removed once this draft is merged]' : ''
+    let line = `${pad}- [${node.type}] (id ${node._id}) ${formatNodeSummary(node)}${errors}${pendingDeletion}`
     if (node.type === 'branch') {
       line += node.branches.map((branch, index) =>
-        `\n${pad}  Branch ${index + 1} (id ${branch._id}) if ${formatConditionText(branch.condition)}:\n${formatSequence(branch.sequence, indent + 2)}`
+        `\n${pad}  Branch ${index + 1} (id ${branch._id})${branch.pendingDeletion ? ' [PENDING DELETION]' : ''} if ${formatConditionText(branch.condition)}:\n${formatSequence(branch.sequence, indent + 2)}`
       ).join('')
     }
     return line
