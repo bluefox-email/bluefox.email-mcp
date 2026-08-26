@@ -92,17 +92,17 @@ describe('get_list_subscriber', () => {
 describe('add_list_subscriber', () => {
   test('subscribes a contact with just an email', async () => {
     const { client, add_list_subscriber: addSubscriber } = setup()
-    client.postAbsolute.mockResolvedValue({ email: 'alice@example.com', status: 'active' })
+    client.post.mockResolvedValue({ email: 'alice@example.com', status: 'active' })
 
     const result = await addSubscriber.handler({ subscriberListId: 'list123', email: 'alice@example.com' })
 
-    expect(client.postAbsolute).toHaveBeenCalledWith('/v1/subscriber-lists/list123', { email: 'alice@example.com' })
+    expect(client.post).toHaveBeenCalledWith('/subscriber-lists/list123/subscribers', { email: 'alice@example.com' })
     expect(result.content[0].text).toBe('Subscribed alice@example.com to the list (status: active).')
   })
 
   test('subscribes a contact with name, tags, custom fields, and an explicit status to skip double opt-in', async () => {
     const { client, add_list_subscriber: addSubscriber } = setup()
-    client.postAbsolute.mockResolvedValue({ email: 'alice@example.com', status: 'active' })
+    client.post.mockResolvedValue({ email: 'alice@example.com', status: 'active' })
 
     await addSubscriber.handler({
       subscriberListId: 'list123',
@@ -113,7 +113,7 @@ describe('add_list_subscriber', () => {
       customFields: { plan: 'pro' }
     })
 
-    expect(client.postAbsolute).toHaveBeenCalledWith('/v1/subscriber-lists/list123', {
+    expect(client.post).toHaveBeenCalledWith('/subscriber-lists/list123/subscribers', {
       email: 'alice@example.com',
       plan: 'pro',
       name: 'Alice',
@@ -126,17 +126,17 @@ describe('add_list_subscriber', () => {
 describe('update_list_subscriber', () => {
   test('updates a subscriber\'s status', async () => {
     const { client, update_list_subscriber: updateSubscriber } = setup()
-    client.patchAbsolute.mockResolvedValue({ email: 'alice@example.com', status: 'unsubscribed' })
+    client.patch.mockResolvedValue({ email: 'alice@example.com', status: 'unsubscribed' })
 
     const result = await updateSubscriber.handler({ subscriberListId: 'list123', email: 'alice@example.com', status: 'unsubscribed' })
 
-    expect(client.patchAbsolute).toHaveBeenCalledWith('/v1/subscriber-lists/list123/alice%40example.com', { status: 'unsubscribed' })
+    expect(client.patch).toHaveBeenCalledWith('/subscriber-lists/list123/subscribers/alice%40example.com', { status: 'unsubscribed' })
     expect(result.content[0].text).toBe('Updated alice@example.com on the list (status: unsubscribed).')
   })
 
   test('updates email, name, tags, custom fields, and pausedUntil together', async () => {
     const { client, update_list_subscriber: updateSubscriber } = setup()
-    client.patchAbsolute.mockResolvedValue({ email: 'new@example.com', status: 'paused' })
+    client.patch.mockResolvedValue({ email: 'new@example.com', status: 'paused' })
 
     await updateSubscriber.handler({
       subscriberListId: 'list123',
@@ -149,7 +149,7 @@ describe('update_list_subscriber', () => {
       customFields: { plan: 'pro' }
     })
 
-    expect(client.patchAbsolute).toHaveBeenCalledWith('/v1/subscriber-lists/list123/alice%40example.com', {
+    expect(client.patch).toHaveBeenCalledWith('/subscriber-lists/list123/subscribers/alice%40example.com', {
       plan: 'pro',
       email: 'new@example.com',
       name: 'Alice',

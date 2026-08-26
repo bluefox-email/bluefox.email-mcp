@@ -36,22 +36,22 @@ describe('import_contacts', () => {
 
   test('subscribes each contact to a list given by id', async () => {
     const { client, import_contacts: importContacts } = setup()
-    client.postAbsolute.mockResolvedValue({})
+    client.post.mockResolvedValue({})
 
     const result = await importContacts.handler({ contacts: [{ email: 'a@example.com' }], subscriberListId: 'list123' })
 
-    expect(client.postAbsolute).toHaveBeenCalledWith('/v1/subscriber-lists/list123', { email: 'a@example.com' })
+    expect(client.post).toHaveBeenCalledWith('/subscriber-lists/list123/subscribers', { email: 'a@example.com' })
     expect(result.content[0].text).toBe('Imported 1/1 contact(s) to the list.')
   })
 
   test('resolves a list given by name and passes status through', async () => {
     const { client, import_contacts: importContacts } = setup()
     client.get.mockResolvedValue({ count: 1, items: [{ _id: 'list456' }] })
-    client.postAbsolute.mockResolvedValue({})
+    client.post.mockResolvedValue({})
 
     await importContacts.handler({ contacts: [{ email: 'a@example.com' }], subscriberListName: 'Newsletter', status: 'active' })
 
-    expect(client.postAbsolute).toHaveBeenCalledWith('/v1/subscriber-lists/list456', { email: 'a@example.com', status: 'active' })
+    expect(client.post).toHaveBeenCalledWith('/subscriber-lists/list456/subscribers', { email: 'a@example.com', status: 'active' })
   })
 
   test('does not send status when no list is given', async () => {

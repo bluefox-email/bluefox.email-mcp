@@ -48,7 +48,7 @@ export function createContactImportTools ({ client, resolveIdOptional }) {
 
           try {
             if (listId) {
-              await client.postAbsolute(`/v1/subscriber-lists/${listId}`, body)
+              await client.post(`/subscriber-lists/${listId}/subscribers`, body)
             } else {
               await client.post('/contacts', body)
             }
