@@ -45,7 +45,7 @@ function lifecycleTool ({ client, resolveIdOrRequired }, { name, title, pastTens
       if (preview) {
         return preview
       }
-      const result = await client.post(`/automations/${automationId}${path}`, {})
+      const result = await client.post(`/automations/${automationId}${path}`, { confirm: true })
       if (result.hasErrors) {
         return textResult(`Validation failed - nothing was changed:\n\n${formatAutomationDetail(result)}`)
       }
@@ -102,7 +102,7 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           if (preview) {
             return preview
           }
-          await client.del(`/automations/${automationId}`)
+          await client.del(`/automations/${automationId}`, { confirm: 'true' })
           return textResult('Deleted the automation.')
         }
 

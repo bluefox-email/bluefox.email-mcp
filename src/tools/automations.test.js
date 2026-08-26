@@ -113,7 +113,7 @@ describe('manage_automation', () => {
 
     const result = await byName.manage_automation.handler({ action: 'delete', automationId: 'auto1', confirm: true })
 
-    expect(client.del).toHaveBeenCalledWith('/automations/auto1')
+    expect(client.del).toHaveBeenCalledWith('/automations/auto1', { confirm: 'true' })
     expect(result.content[0].text).toBe('Deleted the automation.')
   })
 })
@@ -392,7 +392,7 @@ describe('lifecycle tools', () => {
 
     client.post.mockResolvedValue({ ...baseAutomation, status: 'active' })
     const applied = await byName[toolName].handler({ automationId: 'auto1', confirm: true })
-    expect(client.post).toHaveBeenCalledWith(`/automations/auto1${path}`, {})
+    expect(client.post).toHaveBeenCalledWith(`/automations/auto1${path}`, { confirm: true })
     expect(applied.content[0].text).toContain(pastTense)
   })
 
