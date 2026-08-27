@@ -222,13 +222,13 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
     {
       name: 'manage_automation_node',
       config: {
-        title: 'Add, update, or delete a step in an automation\'s sequence',
-        description: 'Steps run in order top to bottom. Use manage_automation (action "get") first to see the current sequence and every node\'s id - branch sub-conditions are addressable the same way, by their own id. send-email/notify content (subject, body, etc.) is set separately via manage_automation_email_content, not here.',
+        title: 'Add, update, delete, or restore a step in an automation\'s sequence',
+        description: 'Steps run in order top to bottom. Use manage_automation (action "get") first to see the current sequence and every node\'s id - branch sub-conditions are addressable the same way, by their own id. send-email/notify content (subject, body, etc.) is set separately via manage_automation_email_content, not here. Deleting a step on an active/paused automation only stages it for removal (shown as "[PENDING DELETION]" in manage_automation\'s output) until the draft is merged - use "restore" to undo that before merging.',
         inputSchema: {
-          action: z.enum(['add', 'update', 'delete']),
+          action: z.enum(['add', 'update', 'delete', 'restore']),
           automationId: z.string().optional(),
           automationName: z.string().optional().describe('Looked up automatically. Provide this if you do not already have the id.'),
-          nodeId: z.string().optional().describe('update/delete only - the node (or branch sub-condition) to change, from a prior get/add.'),
+          nodeId: z.string().optional().describe('update/delete/restore only - the node (or branch sub-condition) to change, from a prior get/add.'),
           prevNodeId: z.string().optional().describe('add only - insert immediately after this existing node\'s id. Omit to insert as the very first step.'),
           nodeType: z.enum(NODE_TYPES).optional().describe('required for add; only needed for update if changing a send-email/notify node (so its content-handling applies) or genuinely changing the node\'s type.'),
           duration: z.number().optional().describe('delay.'),
@@ -258,7 +258,13 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
 
         if (args.action === 'delete') {
           const result = await client.del(`/automations/${automationId}/node/${args.nodeId}`)
-          return textResult(`Deleted the step:\n\n${formatAutomationDetail(result)}`)
+          const staged = result.status !== 'draft' && result.draftSequence
+          return textResult(`${staged ? 'Flagged the step for deletion (staged in the draft - not applied until merge_automation_draft)' : 'Deleted the step'}:\n\n${formatAutomationDetail(result)}`)
+        }
+
+        if (args.action === 'restore') {
+          const result = await client.put(`/automations/${automationId}/node/${args.nodeId}`, { pendingDeletion: false, emailDeleted: false })
+          return textResult(`Restored the step (undid the pending deletion):\n\n${formatAutomationDetail(result)}`)
         }
 
         const segmentId = await resolveIdOptional({ id: args.segmentId, name: args.segmentName, resourcePath: '/segments', filterField: 'name', label: 'segment' })

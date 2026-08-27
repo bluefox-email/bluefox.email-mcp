@@ -317,6 +317,26 @@ describe('manage_automation_node', () => {
     expect(client.del).toHaveBeenCalledWith('/automations/auto1/node/n1')
     expect(result.content[0].text).toContain('Deleted the step:')
   })
+
+  test('delete on an active automation with a staged draft reports it as pending, not applied', async () => {
+    const { client, byName } = setup()
+    client.del.mockResolvedValue({ ...baseAutomation, status: 'active', draftSequence: [{ _id: 'n1', type: 'delay', pendingDeletion: true }] })
+
+    const result = await byName.manage_automation_node.handler({ action: 'delete', automationId: 'auto1', nodeId: 'n1' })
+
+    expect(result.content[0].text).toContain('Flagged the step for deletion (staged in the draft - not applied until merge_automation_draft)')
+    expect(result.content[0].text).toContain('[PENDING DELETION')
+  })
+
+  test('restore undoes a pending deletion', async () => {
+    const { client, byName } = setup()
+    client.put.mockResolvedValue(baseAutomation)
+
+    const result = await byName.manage_automation_node.handler({ action: 'restore', automationId: 'auto1', nodeId: 'n1' })
+
+    expect(client.put).toHaveBeenCalledWith('/automations/auto1/node/n1', { pendingDeletion: false, emailDeleted: false })
+    expect(result.content[0].text).toContain('Restored the step (undid the pending deletion):')
+  })
 })
 
 describe('manage_automation_email_content', () => {
