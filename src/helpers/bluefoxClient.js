@@ -25,6 +25,14 @@ function buildQueryString (query) {
 
 // Thin wrapper around fetch, the only place that builds bluefox.email URLs and attaches auth.
 export function createBluefoxClient ({ baseUrl, projectId, apiKey }) {
+  async function parseJsonResult (res) {
+    const json = await res.json().catch(() => null)
+    if (!res.ok || json?.error) {
+      throw new BluefoxApiError(res.status, json?.error)
+    }
+    return json?.result
+  }
+
   async function request (method, path, { query, body } = {}) {
     const url = `${baseUrl}/v1/projectId/${projectId}${path}${buildQueryString(query)}`
     const res = await fetch(url, {
@@ -35,11 +43,25 @@ export function createBluefoxClient ({ baseUrl, projectId, apiKey }) {
       },
       body: body !== undefined ? JSON.stringify(body) : undefined
     })
-    const json = await res.json().catch(() => null)
-    if (!res.ok || json?.error) {
-      throw new BluefoxApiError(res.status, json?.error)
+    return parseJsonResult(res)
+  }
+
+  async function requestForm (path, { fields = {}, file }) {
+    const url = `${baseUrl}/v1/projectId/${projectId}${path}`
+    const form = new FormData()
+    for (const [key, value] of Object.entries(fields)) {
+      if (value !== undefined) {
+        form.append(key, value)
+      }
     }
-    return json?.result
+    form.append(file.fieldName, new Blob([file.buffer], { type: file.contentType }), file.filename)
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: form
+    })
+    return parseJsonResult(res)
   }
 
   // A handful of export-style endpoints (CSV downloads) respond with a raw file body, via
@@ -63,6 +85,7 @@ export function createBluefoxClient ({ baseUrl, projectId, apiKey }) {
     post: (path, body) => request('POST', path, { body }),
     patch: (path, body) => request('PATCH', path, { body }),
     del: path => request('DELETE', path),
-    getText: (path, query) => requestText(path, { query })
+    getText: (path, query) => requestText(path, { query }),
+    postForm: (path, opts) => requestForm(path, opts)
   }
 }
