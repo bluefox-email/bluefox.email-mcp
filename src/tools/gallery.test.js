@@ -34,7 +34,7 @@ afterEach(() => {
 })
 
 describe('manage_gallery', () => {
-  test('list_folders reports no folders here', async () => {
+  test('list_folders reports no folders here when the API sends no galleryName (pre-deploy fallback)', async () => {
     const { client, manageGallery } = setup()
     client.get.mockResolvedValue({ count: 0, items: [] })
 
@@ -60,7 +60,7 @@ describe('manage_gallery', () => {
     expect(result.content[0].text).toBe('3 folder(s):\n"Logos" (id f1) - top level\n"Old logos" (id f2)\n(more not shown)')
   })
 
-  test('list_folders at the top level prefixes a line naming the project folder', async () => {
+  test('list_folders at the top level lists the project folder itself as the first entry', async () => {
     const { client, manageGallery } = setup()
     client.get.mockResolvedValue({
       count: 1,
@@ -71,7 +71,32 @@ describe('manage_gallery', () => {
     const result = await manageGallery.handler({ action: 'list_folders' })
 
     expect(client.get).toHaveBeenCalledWith('/gallery/folders', { parentFolderId: undefined, limit: 30 })
-    expect(result.content[0].text).toBe('Project folder: "Acme"\n1 folder(s):\n"Logos" (id f1) - top level')
+    expect(result.content[0].text).toBe('2 folder(s):\n"Acme" - the project folder itself, i.e. this top level (target it by omitting parentFolderId; it can\'t be renamed or deleted)\n"Logos" (id f1) - top level')
+  })
+
+  test('list_folders at the top level with nothing else still lists the project folder', async () => {
+    const { client, manageGallery } = setup()
+    client.get.mockResolvedValue({ count: 0, galleryName: 'Acme', items: [] })
+
+    const result = await manageGallery.handler({ action: 'list_folders' })
+
+    expect(result.content[0].text).toBe('1 folder(s):\n"Acme" - the project folder itself, i.e. this top level (target it by omitting parentFolderId; it can\'t be renamed or deleted)')
+  })
+
+  test('list_folders at the top level notes when more folders exist than were returned', async () => {
+    const { client, manageGallery } = setup()
+    client.get.mockResolvedValue({
+      count: 3,
+      galleryName: 'Acme',
+      items: [
+        { _id: 'f1', name: 'Logos', parentFolderId: null },
+        { _id: 'f2', name: 'Assets', parentFolderId: null }
+      ]
+    })
+
+    const result = await manageGallery.handler({ action: 'list_folders' })
+
+    expect(result.content[0].text).toBe('4 folder(s):\n"Acme" - the project folder itself, i.e. this top level (target it by omitting parentFolderId; it can\'t be renamed or deleted)\n"Logos" (id f1) - top level\n"Assets" (id f2) - top level\n(more not shown)')
   })
 
   test('list_folders inside a subfolder does not add the gallery header even when galleryName is present', async () => {

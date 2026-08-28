@@ -99,13 +99,23 @@ function withGalleryHeader (text, list, atTopLevel) {
   return text
 }
 
+// The top level of the gallery IS the project's own folder, which the API never returns as an item
+// (it has no usable id - you reach it by omitting parentFolderId). List it explicitly so it shows up
+// alongside the folders sitting inside it.
+function formatTopLevelFolders (list) {
+  const projectRow = `"${list.galleryName}" - the project folder itself, i.e. this top level (target it by omitting parentFolderId; it can't be renamed or deleted)`
+  const lines = [projectRow, ...list.items.map(formatFolder)].join('\n')
+  const more = list.count > list.items.length ? '\n(more not shown)' : ''
+  return `${list.count + 1} folder(s):\n${lines}${more}`
+}
+
 export function createGalleryTools ({ client }) {
   return [
     {
       name: 'manage_gallery',
       config: {
         title: 'Manage the project\'s image gallery',
-        description: 'Browses and manages this project\'s media gallery - a folder tree of images (logos, product photos, etc.) that can be used when building emails. This includes both the project\'s own folders and any account-wide shared folder (one usable from every project in the account, e.g. "Company Logos") - but never another project\'s own private folders. The top level of the gallery is this project\'s own space - it has no folder entry or id of its own, so there is nothing named after the project to open: you are always already inside it, and it can\'t be renamed or deleted here. Omit parentFolderId to operate at that top level; list_folders/list_images there prefix a "Project folder: <name>" line, and list_folders at the top level returns both the project\'s own top-level folders and any shared ones. To add an image, pass upload_image a web link (imageUrl) or a local file path (imagePath) directly - the server fetches the bytes itself, so you never need to download or base64-encode anything.',
+        description: 'Browses and manages this project\'s media gallery - a folder tree of images (logos, product photos, etc.) that can be used when building emails. This includes both the project\'s own folders and any account-wide shared folder (one usable from every project in the account, e.g. "Company Logos") - but never another project\'s own private folders. The top level of the gallery is this project\'s own space - it has no folder entry or id of its own, so there is nothing named after the project to open: you are always already inside it, and it can\'t be renamed or deleted here. Omit parentFolderId to operate at that top level. list_folders at the top level lists the project folder itself as the first entry (no id - reach it by omitting parentFolderId), followed by the project\'s own top-level folders and any shared ones; list_images at the top level prefixes a "Project folder: <name>" line. To add an image, pass upload_image a web link (imageUrl) or a local file path (imagePath) directly - the server fetches the bytes itself, so you never need to download or base64-encode anything.',
         inputSchema: {
           action: z.enum(['list_folders', 'create_folder', 'rename_folder', 'delete_folder', 'list_images', 'upload_image', 'rename_image', 'delete_image']),
           parentFolderId: z.string().optional().describe('list_folders/list_images/create_folder/upload_image - the folder to operate within. Omit for the top level of the gallery. Get folder ids from list_folders.'),
@@ -121,7 +131,10 @@ export function createGalleryTools ({ client }) {
       handler: async (args) => {
         if (args.action === 'list_folders') {
           const list = await client.get('/gallery/folders', { parentFolderId: args.parentFolderId, limit: 30 })
-          return textResult(withGalleryHeader(formatList(list.items, formatFolder, list.count, 'folder(s)'), list, !args.parentFolderId))
+          if (!args.parentFolderId && list.galleryName) {
+            return textResult(formatTopLevelFolders(list))
+          }
+          return textResult(formatList(list.items, formatFolder, list.count, 'folder(s)'))
         }
 
         if (args.action === 'create_folder') {
