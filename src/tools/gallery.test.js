@@ -1,12 +1,37 @@
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi, afterEach } from 'vitest'
+import fs from 'fs/promises'
 import { createGalleryTools } from './gallery.js'
 import { createFakeClient } from '../helpers/fakeClient.js'
+
+vi.mock('fs/promises', () => ({
+  default: { readFile: vi.fn() }
+}))
 
 function setup () {
   const client = createFakeClient()
   const [manageGallery] = createGalleryTools({ client })
   return { client, manageGallery }
 }
+
+function mockFetch (impl) {
+  const fn = vi.fn(impl)
+  vi.stubGlobal('fetch', fn)
+  return fn
+}
+
+function imageResponse ({ ok = true, status = 200, contentType = 'image/png', bytes = 'img-bytes' } = {}) {
+  return {
+    ok,
+    status,
+    headers: { get: header => (header === 'content-type' ? contentType : null) },
+    arrayBuffer: async () => new TextEncoder().encode(bytes).buffer
+  }
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+  fs.readFile.mockReset()
+})
 
 describe('manage_gallery', () => {
   test('list_folders reports no folders here', async () => {
@@ -138,21 +163,107 @@ describe('manage_gallery', () => {
     expect(result.content[0].text).toBe('1 image(s):\n"logo.png" (id i1) - https://cdn.example.com/logo.png')
   })
 
-  test('upload_image requires imageBase64 and imageFileName', async () => {
+  test('upload_image requires exactly one image source', async () => {
     const { manageGallery } = setup()
 
-    await expect(manageGallery.handler({ action: 'upload_image', imageBase64: 'abc' }))
-      .rejects.toThrow('Both imageBase64 and imageFileName are required.')
+    await expect(manageGallery.handler({ action: 'upload_image' }))
+      .rejects.toThrow('Provide exactly one of imageUrl, imagePath, or imageBase64.')
+    await expect(manageGallery.handler({ action: 'upload_image', imageUrl: 'https://x/a.png', imagePath: '/a.png' }))
+      .rejects.toThrow('Provide exactly one of imageUrl, imagePath, or imageBase64.')
   })
 
-  test('upload_image rejects an unsupported file extension', async () => {
+  test('upload_image fetches an imageUrl and uploads the bytes, taking the type and name from the URL path', async () => {
+    const { client, manageGallery } = setup()
+    const fetchFn = mockFetch(async () => imageResponse({ contentType: 'application/octet-stream', bytes: 'png-data' }))
+    client.postForm.mockResolvedValue({ _id: 'i1', name: 'logo.png', url: 'https://cdn.example.com/logo.png' })
+
+    const result = await manageGallery.handler({ action: 'upload_image', imageUrl: 'https://example.com/assets/logo.PNG?v=2', parentFolderId: 'f1' })
+
+    expect(fetchFn).toHaveBeenCalledWith('https://example.com/assets/logo.PNG?v=2')
+    expect(client.postForm).toHaveBeenCalledWith('/gallery/images', {
+      fields: { name: undefined, parentFolderId: 'f1' },
+      file: { fieldName: 'image', buffer: Buffer.from('png-data'), filename: 'logo.PNG', contentType: 'image/png' }
+    })
+    expect(result.content[0].text).toBe('Uploaded image "logo.png" (id i1) - https://cdn.example.com/logo.png.')
+  })
+
+  test('upload_image falls back to the response content-type and a generated filename when the URL has no extension', async () => {
+    const { client, manageGallery } = setup()
+    mockFetch(async () => imageResponse({ contentType: 'image/gif; charset=binary', bytes: 'gif-data' }))
+    client.postForm.mockResolvedValue({ _id: 'i2', name: 'image.gif', url: 'https://cdn.example.com/image.gif' })
+
+    await manageGallery.handler({ action: 'upload_image', imageUrl: 'https://example.com/download' })
+
+    expect(client.postForm).toHaveBeenCalledWith('/gallery/images', {
+      fields: { name: undefined, parentFolderId: undefined },
+      file: { fieldName: 'image', buffer: Buffer.from('gif-data'), filename: 'download', contentType: 'image/gif' }
+    })
+  })
+
+  test('upload_image generates image.<ext> when the URL path has no basename at all', async () => {
+    const { client, manageGallery } = setup()
+    mockFetch(async () => imageResponse({ contentType: 'image/jpeg' }))
+    client.postForm.mockResolvedValue({ _id: 'i3', name: 'image.jpg', url: 'https://cdn.example.com/image.jpg' })
+
+    await manageGallery.handler({ action: 'upload_image', imageUrl: 'https://example.com/' })
+
+    expect(client.postForm.mock.calls[0][1].file.filename).toBe('image.jpg')
+  })
+
+  test('upload_image rejects an imageUrl whose type cannot be determined', async () => {
+    const { manageGallery } = setup()
+    mockFetch(async () => imageResponse({ contentType: null }))
+
+    await expect(manageGallery.handler({ action: 'upload_image', imageUrl: 'https://example.com/download' }))
+      .rejects.toThrow('Could not tell the image type from imageUrl')
+  })
+
+  test('upload_image reports a non-OK imageUrl response', async () => {
+    const { manageGallery } = setup()
+    mockFetch(async () => imageResponse({ ok: false, status: 404 }))
+
+    await expect(manageGallery.handler({ action: 'upload_image', imageUrl: 'https://example.com/missing.png' }))
+      .rejects.toThrow('the server responded 404')
+  })
+
+  test('upload_image reports a failed imageUrl fetch', async () => {
+    const { manageGallery } = setup()
+    mockFetch(async () => { throw new Error('getaddrinfo ENOTFOUND') })
+
+    await expect(manageGallery.handler({ action: 'upload_image', imageUrl: 'https://nope.invalid/a.png' }))
+      .rejects.toThrow('Could not fetch imageUrl: getaddrinfo ENOTFOUND')
+  })
+
+  test('upload_image reads a local imagePath and uploads it', async () => {
+    const { client, manageGallery } = setup()
+    fs.readFile.mockResolvedValue(Buffer.from('local-bytes'))
+    client.postForm.mockResolvedValue({ _id: 'i4', name: 'hero.jpg', url: 'https://cdn.example.com/hero.jpg' })
+
+    await manageGallery.handler({ action: 'upload_image', imagePath: '/Users/me/pics/hero.jpg', name: 'Hero' })
+
+    expect(fs.readFile).toHaveBeenCalledWith('/Users/me/pics/hero.jpg')
+    expect(client.postForm).toHaveBeenCalledWith('/gallery/images', {
+      fields: { name: 'Hero', parentFolderId: undefined },
+      file: { fieldName: 'image', buffer: Buffer.from('local-bytes'), filename: 'hero.jpg', contentType: 'image/jpeg' }
+    })
+  })
+
+  test('upload_image rejects an imagePath with an unsupported extension', async () => {
     const { manageGallery } = setup()
 
-    await expect(manageGallery.handler({ action: 'upload_image', imageBase64: 'abc', imageFileName: 'doc.pdf' }))
-      .rejects.toThrow('imageFileName must end in one of')
+    await expect(manageGallery.handler({ action: 'upload_image', imagePath: '/tmp/doc.pdf' }))
+      .rejects.toThrow('imagePath must end in .jpg, .jpeg, .png, .gif.')
   })
 
-  test('upload_image posts multipart form data and reports the result', async () => {
+  test('upload_image reports an unreadable imagePath', async () => {
+    const { manageGallery } = setup()
+    fs.readFile.mockRejectedValue(new Error('ENOENT: no such file'))
+
+    await expect(manageGallery.handler({ action: 'upload_image', imagePath: '/tmp/missing.png' }))
+      .rejects.toThrow('Could not read imagePath: ENOENT: no such file')
+  })
+
+  test('upload_image still accepts base64 bytes with an explicit filename', async () => {
     const { client, manageGallery } = setup()
     client.postForm.mockResolvedValue({ _id: 'i1', name: 'logo.png', url: 'https://cdn.example.com/logo.png' })
 
@@ -163,6 +274,20 @@ describe('manage_gallery', () => {
       file: { fieldName: 'image', buffer: Buffer.from('fake image bytes'), filename: 'logo.PNG', contentType: 'image/png' }
     })
     expect(result.content[0].text).toBe('Uploaded image "logo.png" (id i1) - https://cdn.example.com/logo.png.')
+  })
+
+  test('upload_image with base64 requires imageFileName', async () => {
+    const { manageGallery } = setup()
+
+    await expect(manageGallery.handler({ action: 'upload_image', imageBase64: 'abc' }))
+      .rejects.toThrow('imageFileName is required when uploading with imageBase64.')
+  })
+
+  test('upload_image with base64 rejects an unsupported filename extension', async () => {
+    const { manageGallery } = setup()
+
+    await expect(manageGallery.handler({ action: 'upload_image', imageBase64: 'abc', imageFileName: 'doc.pdf' }))
+      .rejects.toThrow('imageFileName must end in .jpg, .jpeg, .png, .gif.')
   })
 
   test('rename_image requires an imageId', async () => {

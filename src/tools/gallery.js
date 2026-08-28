@@ -1,3 +1,5 @@
+import fs from 'fs/promises'
+import path from 'path'
 import { z } from 'zod'
 import { textResult, ResolveError } from '../helpers/errors.js'
 
@@ -6,6 +8,72 @@ const extensionToContentType = {
   jpeg: 'image/jpeg',
   png: 'image/png',
   gif: 'image/gif'
+}
+
+const contentTypeToExtension = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/gif': 'gif'
+}
+
+const allowedExtensionsNote = Object.keys(extensionToContentType).map(ext => '.' + ext).join(', ')
+
+function contentTypeFromName (name) {
+  const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : ''
+  return extensionToContentType[ext]
+}
+
+// Turns whichever of imageUrl / imagePath / imageBase64 was given into the raw bytes to upload,
+// so the caller never has to download or base64-encode an image itself.
+async function resolveUploadFile (args) {
+  const sources = ['imageUrl', 'imagePath', 'imageBase64'].filter(key => args[key])
+  if (sources.length !== 1) {
+    throw new ResolveError('Provide exactly one of imageUrl, imagePath, or imageBase64.')
+  }
+
+  if (args.imageUrl) {
+    let res
+    try {
+      res = await fetch(args.imageUrl)
+    } catch (err) {
+      throw new ResolveError(`Could not fetch imageUrl: ${err.message}`)
+    }
+    if (!res.ok) {
+      throw new ResolveError(`Could not fetch imageUrl: the server responded ${res.status}.`)
+    }
+    const buffer = Buffer.from(await res.arrayBuffer())
+    const urlPath = new URL(args.imageUrl).pathname
+    const headerType = (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase()
+    const contentType = contentTypeFromName(urlPath) || (contentTypeToExtension[headerType] ? headerType : undefined)
+    if (!contentType) {
+      throw new ResolveError(`Could not tell the image type from imageUrl - it must be a ${allowedExtensionsNote} image.`)
+    }
+    const filename = path.basename(urlPath) || `image.${contentTypeToExtension[contentType]}`
+    return { buffer, filename, contentType }
+  }
+
+  if (args.imagePath) {
+    const contentType = contentTypeFromName(args.imagePath)
+    if (!contentType) {
+      throw new ResolveError(`imagePath must end in ${allowedExtensionsNote}.`)
+    }
+    let buffer
+    try {
+      buffer = await fs.readFile(args.imagePath)
+    } catch (err) {
+      throw new ResolveError(`Could not read imagePath: ${err.message}`)
+    }
+    return { buffer, filename: path.basename(args.imagePath), contentType }
+  }
+
+  if (!args.imageFileName) {
+    throw new ResolveError('imageFileName is required when uploading with imageBase64.')
+  }
+  const contentType = contentTypeFromName(args.imageFileName)
+  if (!contentType) {
+    throw new ResolveError(`imageFileName must end in ${allowedExtensionsNote}.`)
+  }
+  return { buffer: Buffer.from(args.imageBase64, 'base64'), filename: args.imageFileName, contentType }
 }
 
 function formatFolder (folder) {
@@ -37,15 +105,17 @@ export function createGalleryTools ({ client }) {
       name: 'manage_gallery',
       config: {
         title: 'Manage the project\'s image gallery',
-        description: 'Browses and manages this project\'s media gallery - a folder tree of images (logos, product photos, etc.) that can be used when building emails. This includes both the project\'s own folders and any account-wide shared folder (one usable from every project in the account, e.g. "Company Logos") - but never another project\'s own private folders. The top level of the gallery is this project\'s own space - it has no folder entry or id of its own, so there is nothing named after the project to open: you are always already inside it, and it can\'t be renamed or deleted here. Omit parentFolderId to operate at that top level; list_folders/list_images there prefix a "Project folder: <name>" line, and list_folders at the top level returns both the project\'s own top-level folders and any shared ones.',
+        description: 'Browses and manages this project\'s media gallery - a folder tree of images (logos, product photos, etc.) that can be used when building emails. This includes both the project\'s own folders and any account-wide shared folder (one usable from every project in the account, e.g. "Company Logos") - but never another project\'s own private folders. The top level of the gallery is this project\'s own space - it has no folder entry or id of its own, so there is nothing named after the project to open: you are always already inside it, and it can\'t be renamed or deleted here. Omit parentFolderId to operate at that top level; list_folders/list_images there prefix a "Project folder: <name>" line, and list_folders at the top level returns both the project\'s own top-level folders and any shared ones. To add an image, pass upload_image a web link (imageUrl) or a local file path (imagePath) directly - the server fetches the bytes itself, so you never need to download or base64-encode anything.',
         inputSchema: {
           action: z.enum(['list_folders', 'create_folder', 'rename_folder', 'delete_folder', 'list_images', 'upload_image', 'rename_image', 'delete_image']),
           parentFolderId: z.string().optional().describe('list_folders/list_images/create_folder/upload_image - the folder to operate within. Omit for the top level of the gallery. Get folder ids from list_folders.'),
           folderId: z.string().optional().describe('rename_folder/delete_folder, required - the folder to act on. Get it from list_folders.'),
           imageId: z.string().optional().describe('rename_image/delete_image, required - the image to act on. Get it from list_images.'),
-          name: z.string().optional().describe('create_folder (required, new folder name) / rename_folder (required, new name) / rename_image (required, new name) / upload_image (optional, defaults to imageFileName).'),
-          imageBase64: z.string().optional().describe('upload_image only, required - the image file content, base64-encoded.'),
-          imageFileName: z.string().optional().describe('upload_image only, required - a filename ending in .jpg, .jpeg, .png, or .gif. Used to determine the content type, and as the default name if name is omitted.')
+          name: z.string().optional().describe('create_folder (required, new folder name) / rename_folder (required, new name) / rename_image (required, new name) / upload_image (optional gallery display name, defaults to the file name).'),
+          imageUrl: z.string().optional().describe('upload_image - an http(s) URL to fetch the image from. Use this for an image that is already on the web: pass the link directly, do not download or encode it yourself.'),
+          imagePath: z.string().optional().describe('upload_image - a path to an image file on this machine. Use this for a local file: pass the path directly, do not read or encode it yourself.'),
+          imageBase64: z.string().optional().describe('upload_image fallback - the raw image bytes, base64-encoded. Only use this when there is no URL or local path, e.g. an image pasted straight into the chat. Requires imageFileName.'),
+          imageFileName: z.string().optional().describe('upload_image - required only with imageBase64: a filename ending in .jpg, .jpeg, .png, or .gif, used to determine the image type.')
         }
       },
       handler: async (args) => {
@@ -81,17 +151,10 @@ export function createGalleryTools ({ client }) {
         }
 
         if (args.action === 'upload_image') {
-          if (!args.imageBase64 || !args.imageFileName) {
-            throw new ResolveError('Both imageBase64 and imageFileName are required.')
-          }
-          const extension = args.imageFileName.split('.').pop().toLowerCase()
-          const contentType = extensionToContentType[extension]
-          if (!contentType) {
-            throw new ResolveError(`imageFileName must end in one of: ${Object.keys(extensionToContentType).map(ext => '.' + ext).join(', ')}.`)
-          }
+          const file = await resolveUploadFile(args)
           const result = await client.postForm('/gallery/images', {
             fields: { name: args.name, parentFolderId: args.parentFolderId },
-            file: { fieldName: 'image', buffer: Buffer.from(args.imageBase64, 'base64'), filename: args.imageFileName, contentType }
+            file: { fieldName: 'image', ...file }
           })
           return textResult(`Uploaded image ${formatImage(result)}.`)
         }
