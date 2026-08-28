@@ -24,13 +24,20 @@ function formatList (items, formatItem, count, label) {
   return `${count} ${label}:\n${lines}${count > items.length ? '\n(more not shown)' : ''}`
 }
 
+function withGalleryHeader (text, list, atTopLevel) {
+  if (atTopLevel && list.galleryName) {
+    return `Project folder: "${list.galleryName}"\n${text}`
+  }
+  return text
+}
+
 export function createGalleryTools ({ client }) {
   return [
     {
       name: 'manage_gallery',
       config: {
         title: 'Manage the project\'s image gallery',
-        description: 'Browses and manages this project\'s media gallery - a folder tree of images (logos, product photos, etc.) that can be used when building emails. This includes both the project\'s own folders and any account-wide shared folder (one usable from every project in the account, e.g. "Company Logos") - but never another project\'s own private folders. The top level of the gallery has no id of its own - omit parentFolderId to operate there; list_folders at the top level returns both the project\'s own top-level folders and any shared ones.',
+        description: 'Browses and manages this project\'s media gallery - a folder tree of images (logos, product photos, etc.) that can be used when building emails. This includes both the project\'s own folders and any account-wide shared folder (one usable from every project in the account, e.g. "Company Logos") - but never another project\'s own private folders. The top level of the gallery is this project\'s own space - it has no folder entry or id of its own, so there is nothing named after the project to open: you are always already inside it, and it can\'t be renamed or deleted here. Omit parentFolderId to operate at that top level; list_folders/list_images there prefix a "Project folder: <name>" line, and list_folders at the top level returns both the project\'s own top-level folders and any shared ones.',
         inputSchema: {
           action: z.enum(['list_folders', 'create_folder', 'rename_folder', 'delete_folder', 'list_images', 'upload_image', 'rename_image', 'delete_image']),
           parentFolderId: z.string().optional().describe('list_folders/list_images/create_folder/upload_image - the folder to operate within. Omit for the top level of the gallery. Get folder ids from list_folders.'),
@@ -44,7 +51,7 @@ export function createGalleryTools ({ client }) {
       handler: async (args) => {
         if (args.action === 'list_folders') {
           const list = await client.get('/gallery/folders', { parentFolderId: args.parentFolderId, limit: 30 })
-          return textResult(formatList(list.items, formatFolder, list.count, 'folder(s)'))
+          return textResult(withGalleryHeader(formatList(list.items, formatFolder, list.count, 'folder(s)'), list, !args.parentFolderId))
         }
 
         if (args.action === 'create_folder') {
@@ -70,7 +77,7 @@ export function createGalleryTools ({ client }) {
 
         if (args.action === 'list_images') {
           const list = await client.get('/gallery/images', { parentFolderId: args.parentFolderId, limit: 30 })
-          return textResult(formatList(list.items, formatImage, list.count, 'image(s)'))
+          return textResult(withGalleryHeader(formatList(list.items, formatImage, list.count, 'image(s)'), list, !args.parentFolderId))
         }
 
         if (args.action === 'upload_image') {

@@ -35,6 +35,46 @@ describe('manage_gallery', () => {
     expect(result.content[0].text).toBe('3 folder(s):\n"Logos" (id f1) - top level\n"Old logos" (id f2)\n(more not shown)')
   })
 
+  test('list_folders at the top level prefixes a line naming the project folder', async () => {
+    const { client, manageGallery } = setup()
+    client.get.mockResolvedValue({
+      count: 1,
+      galleryName: 'Acme',
+      items: [{ _id: 'f1', name: 'Logos', parentFolderId: null }]
+    })
+
+    const result = await manageGallery.handler({ action: 'list_folders' })
+
+    expect(client.get).toHaveBeenCalledWith('/gallery/folders', { parentFolderId: undefined, limit: 30 })
+    expect(result.content[0].text).toBe('Project folder: "Acme"\n1 folder(s):\n"Logos" (id f1) - top level')
+  })
+
+  test('list_folders inside a subfolder does not add the gallery header even when galleryName is present', async () => {
+    const { client, manageGallery } = setup()
+    client.get.mockResolvedValue({
+      count: 1,
+      galleryName: 'Acme',
+      items: [{ _id: 'f2', name: 'Old logos', parentFolderId: 'f1' }]
+    })
+
+    const result = await manageGallery.handler({ action: 'list_folders', parentFolderId: 'f1' })
+
+    expect(result.content[0].text).toBe('1 folder(s):\n"Old logos" (id f2)')
+  })
+
+  test('list_images at the top level prefixes the gallery header', async () => {
+    const { client, manageGallery } = setup()
+    client.get.mockResolvedValue({
+      count: 1,
+      galleryName: 'Acme',
+      items: [{ _id: 'i1', name: 'logo.png', url: 'https://cdn.example.com/logo.png' }]
+    })
+
+    const result = await manageGallery.handler({ action: 'list_images' })
+
+    expect(result.content[0].text).toBe('Project folder: "Acme"\n1 image(s):\n"logo.png" (id i1) - https://cdn.example.com/logo.png')
+  })
+
   test('create_folder creates at the given parent and reports the result', async () => {
     const { client, manageGallery } = setup()
     client.post.mockResolvedValue({ _id: 'f2', name: 'Old logos', parentFolderId: 'f1' })
