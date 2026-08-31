@@ -122,6 +122,35 @@ describe('createBluefoxClient', () => {
     expect(result).toBe('type,name,value\nCNAME,a,b')
   })
 
+  test('postForm() posts a multipart body with the file and given fields, omitting undefined fields', async () => {
+    const fetchSpy = mockFetchOnce(201, { status: 201, result: { _id: 'img1' } })
+
+    const result = await client.postForm('/gallery/images', {
+      fields: { name: 'logo.png', parentFolderId: undefined },
+      file: { fieldName: 'image', buffer: Buffer.from('bytes'), filename: 'logo.png', contentType: 'image/png' }
+    })
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://api.bluefox.email/v1/projectId/proj1/gallery/images',
+      expect.objectContaining({ method: 'POST', headers: { Authorization: 'Bearer key1' } })
+    )
+    const body = fetchSpy.mock.calls[0][1].body
+    expect(body).toBeInstanceOf(FormData)
+    expect(body.get('name')).toBe('logo.png')
+    expect(body.has('parentFolderId')).toBe(false)
+    expect(body.get('image').name).toBe('logo.png')
+    expect(result).toEqual({ _id: 'img1' })
+  })
+
+  test('postForm() throws BluefoxApiError on a non-2xx response', async () => {
+    mockFetchOnce(400, { status: 400, error: { name: 'VALIDATION_ERROR', message: 'Invalid image.' } })
+
+    await expect(client.postForm('/gallery/images', {
+      fields: {},
+      file: { fieldName: 'image', buffer: Buffer.from('bytes'), filename: 'logo.png', contentType: 'image/png' }
+    })).rejects.toThrow('Invalid image.')
+  })
+
   test('getText() throws BluefoxApiError on a non-2xx response', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
       ok: false,
