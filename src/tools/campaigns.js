@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { textResult } from '../helpers/errors.js'
+import { normalizeScheduledFor } from '../helpers/scheduledFor.js'
 import { feedsSchema } from './feedsSchema.js'
 import { formatEmailDetail } from './emailLifecycle.js'
 
@@ -19,8 +20,8 @@ export function createCampaignTools ({ client, resolveIdOrRequired, resolveIdOpt
           subscriberListName: z.string().optional().describe('The subscriber list to send to, by name - looked up automatically. Provide this if you do not already have the id.'),
           segmentId: z.string().optional().describe('Optional - narrows the subscriber list down further, by id.'),
           segmentName: z.string().optional().describe('Optional - narrows the subscriber list down further, by segment name.'),
-          scheduledFor: z.string().optional().describe('ISO 8601 date-time to schedule sending. Resolve relative phrases like "tomorrow at 8am" to an absolute ISO datetime yourself before calling this tool, using the current date/time. Omit to save as a draft instead of scheduling.'),
-          timeZone: z.string().optional().describe('IANA time zone (e.g. "America/New_York") used to interpret scheduledFor. Defaults to UTC.'),
+          scheduledFor: z.string().optional().describe('Absolute ISO 8601 date-time to schedule sending, with a UTC offset or trailing "Z" (e.g. "2026-09-10T08:00:00-05:00"). Resolve relative phrases like "tomorrow at 8am" to an absolute instant yourself first, using the current date/time and the recipient time zone. Omit to save as a draft instead of scheduling.'),
+          timeZone: z.string().optional().describe('IANA time zone (e.g. "America/New_York") stored with the campaign and shown next to the scheduled time in the app. It does NOT shift scheduledFor - that must already be an absolute instant. Defaults to UTC.'),
           previewText: z.string().optional().describe('Inbox preview text - ask the user for this if not given, it meaningfully affects open rates.'),
           senderIdentityId: z.string().optional(),
           senderIdentityEmail: z.string().optional().describe('The sender identity to send from, by its email address - looked up automatically.'),
@@ -80,7 +81,7 @@ export function createCampaignTools ({ client, resolveIdOrRequired, resolveIdOpt
         }
         if (args.scheduledFor) {
           body.status = 'scheduled'
-          body.scheduledTo = args.scheduledFor
+          body.scheduledTo = normalizeScheduledFor(args.scheduledFor)
         }
 
         const result = await client.post('/campaigns', body)
