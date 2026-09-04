@@ -24,7 +24,7 @@ describe('manage_project_settings', () => {
     const text = result.content[0].text
 
     expect(client.get).toHaveBeenCalledWith('')
-    expect(text).toContain('Project "My Project" - status: production, logoUrl: https://example.com/logo.png, auto-remove on bounce: deleteContact, auto-remove on complaint: off, domain whitelist: example.com, shop.example.com.')
+    expect(text).toContain('Project "My Project" - status: production, logoUrl: https://example.com/logo.png, custom subscription preferences URL: none (using bluefox.email\'s default page), auto-remove on bounce: deleteContact, auto-remove on complaint: off, domain whitelist: example.com, shop.example.com.')
     expect(text).toContain('Unengaged contact segment: Group 1 (OR): not-opened')
   })
 
@@ -68,6 +68,22 @@ describe('manage_project_settings', () => {
     expect(result.content[0].text).toContain('logoUrl: none')
   })
 
+  test('get reports no custom subscription preferences URL when none is set', async () => {
+    const { client, manageProjectSettings } = setup()
+    client.get.mockResolvedValue({ name: 'My Project', status: 'sandbox' })
+
+    const result = await manageProjectSettings.handler({ action: 'get' })
+    expect(result.content[0].text).toContain('custom subscription preferences URL: none (using bluefox.email\'s default page)')
+  })
+
+  test('get reports the custom subscription preferences URL when set', async () => {
+    const { client, manageProjectSettings } = setup()
+    client.get.mockResolvedValue({ name: 'My Project', status: 'sandbox', customSubscriptionPreferencesUrl: 'example.com/preferences' })
+
+    const result = await manageProjectSettings.handler({ action: 'get' })
+    expect(result.content[0].text).toContain('custom subscription preferences URL: example.com/preferences')
+  })
+
   test('update sends only the given fields and returns the resulting full settings', async () => {
     const { client, manageProjectSettings } = setup()
     client.patch.mockResolvedValue({ name: 'New Name', status: 'sandbox' })
@@ -102,6 +118,24 @@ describe('manage_project_settings', () => {
     await manageProjectSettings.handler({ action: 'update', logoUrl: '' })
 
     expect(client.patch).toHaveBeenCalledWith('', { logoUrl: '' })
+  })
+
+  test('update can set customSubscriptionPreferencesUrl', async () => {
+    const { client, manageProjectSettings } = setup()
+    client.patch.mockResolvedValue({ name: 'My Project', customSubscriptionPreferencesUrl: 'example.com/preferences' })
+
+    await manageProjectSettings.handler({ action: 'update', customSubscriptionPreferencesUrl: 'example.com/preferences' })
+
+    expect(client.patch).toHaveBeenCalledWith('', { customSubscriptionPreferencesUrl: 'example.com/preferences' })
+  })
+
+  test('update clears customSubscriptionPreferencesUrl when explicitly given an empty string', async () => {
+    const { client, manageProjectSettings } = setup()
+    client.patch.mockResolvedValue({ name: 'My Project' })
+
+    await manageProjectSettings.handler({ action: 'update', customSubscriptionPreferencesUrl: '' })
+
+    expect(client.patch).toHaveBeenCalledWith('', { customSubscriptionPreferencesUrl: '' })
   })
 
   test('update replaces the domain whitelist and echoes the resulting list', async () => {
