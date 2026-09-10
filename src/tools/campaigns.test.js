@@ -78,6 +78,37 @@ describe('create_campaign', () => {
     expect(result.content[0].text).toContain('scheduled for 2026-08-01T08:00:00.000Z (time zone: America/New_York)')
   })
 
+  test('normalises an offset scheduledFor to ISO 8601 UTC', async () => {
+    const { client, createCampaign } = setup()
+    client.post.mockResolvedValue({ _id: 'campaign123', name: 'Summer Sale', status: 'scheduled' })
+
+    await createCampaign.handler({
+      name: 'Summer Sale',
+      subject: 'Big discounts',
+      body: 'Hello',
+      subscriberListId: 'list123',
+      scheduledFor: '2026-09-10T08:00:00-05:00'
+    })
+
+    expect(client.post).toHaveBeenCalledWith('/campaigns', expect.objectContaining({
+      status: 'scheduled',
+      scheduledTo: '2026-09-10T13:00:00.000Z'
+    }))
+  })
+
+  test('rejects an unparseable scheduledFor instead of forwarding it', async () => {
+    const { client, createCampaign } = setup()
+
+    await expect(createCampaign.handler({
+      name: 'Summer Sale',
+      subject: 'Big discounts',
+      body: 'Hello',
+      subscriberListId: 'list123',
+      scheduledFor: 'tomorrow at 8am'
+    })).rejects.toThrow('is not a valid date-time')
+    expect(client.post).not.toHaveBeenCalled()
+  })
+
   test('creates with a sender identity resolved by email and a feed', async () => {
     const { client, createCampaign } = setup()
     client.get.mockResolvedValue({ items: [{ _id: 'sender123' }] })
