@@ -25,7 +25,7 @@ See the full list of what's supported in [Tools](#tools) below.
 ### 1. Install
 
 ```bash
-git clone https://github.com/gyulanemeth/bluefox.email-mcp.git
+git clone https://github.com/bluefox-email/bluefox.email-mcp
 cd bluefox.email-mcp
 npm install
 npm link
