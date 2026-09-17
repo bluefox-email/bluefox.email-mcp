@@ -139,7 +139,8 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           schedule: z.enum(['daily', 'weekday', 'weekly', 'monthly', 'monthly-on-the-nth']).optional().describe('set only, time-based.'),
           time: z.string().optional().describe('set only, time-based - "HH:MM", 24h. Defaults to 09:00.'),
           dayOf: z.union([z.string(), z.array(z.string())]).optional().describe('set only, time-based - required for weekly/monthly/monthly-on-the-nth.'),
-          nthOf: z.number().optional().describe('set only, time-based monthly-on-the-nth - which occurrence (e.g. 2 for "the 2nd Tuesday").')
+          nthOf: z.number().optional().describe('set only, time-based monthly-on-the-nth - which occurrence (e.g. 2 for "the 2nd Tuesday").'),
+          confirm: z.boolean().optional().describe(`set only. ${CONFIRM_DESCRIPTION}`)
         }
       },
       handler: async (args) => {
@@ -148,6 +149,11 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
         if (args.action === 'get') {
           const automation = await client.get(`/automations/${automationId}`)
           return textResult(formatTrigger(automation.trigger))
+        }
+
+        const { result: preview } = await previewUnlessConfirmed({ client, resolveIdOrRequired, id: automationId, confirm: args.confirm, verb: 'setting a new trigger for this automation (changes when contacts enter it going forward)' })
+        if (preview) {
+          return preview
         }
 
         const subscriberListId = await resolveIdOptional({ id: args.subscriberListId, name: args.subscriberListName, resourcePath: '/subscriber-lists', filterField: 'name', label: 'subscriber list' })
@@ -195,7 +201,8 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           segmentId: z.string().optional().describe('set only.'),
           segmentName: z.string().optional().describe('Same as segmentId, by segment name.'),
           excludeUnengaged: z.boolean().optional().describe('set only.'),
-          leaveSegment: z.boolean().optional().describe('set only - also removes the contact from the matched segment when they exit.')
+          leaveSegment: z.boolean().optional().describe('set only - also removes the contact from the matched segment when they exit.'),
+          confirm: z.boolean().optional().describe(`set/clear only. ${CONFIRM_DESCRIPTION}`)
         }
       },
       handler: async (args) => {
@@ -207,8 +214,17 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
         }
 
         if (args.action === 'clear') {
+          const { result: clearPreview } = await previewUnlessConfirmed({ client, resolveIdOrRequired, id: automationId, confirm: args.confirm, verb: 'clearing this automation\'s exit criteria (contacts will no longer be removed mid-flow by it)' })
+          if (clearPreview) {
+            return clearPreview
+          }
           const result = await client.patch(`/automations/${automationId}/exit-criteria`, { active: false })
           return textResult(result.draftExitCriteria ? 'Staged clearing the exit criteria (not live until merged).' : 'Cleared the exit criteria.')
+        }
+
+        const { result: setPreview } = await previewUnlessConfirmed({ client, resolveIdOrRequired, id: automationId, confirm: args.confirm, verb: 'setting exit criteria for this automation (contacts already in it may be removed once it matches)' })
+        if (setPreview) {
+          return setPreview
         }
 
         const segmentId = await resolveIdOptional({ id: args.segmentId, name: args.segmentName, resourcePath: '/segments', filterField: 'name', label: 'segment' })
@@ -250,21 +266,32 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           url: z.string().optional().describe('webhook.'),
           method: z.enum(['POST', 'GET', 'PUT', 'PATCH']).optional().describe('webhook.'),
           headers: z.record(z.string()).optional().describe('webhook.'),
-          includeContactData: z.boolean().optional().describe('webhook.')
+          includeContactData: z.boolean().optional().describe('webhook.'),
+          confirm: z.boolean().optional().describe(`add/update/delete only. ${CONFIRM_DESCRIPTION}`)
         }
       },
       handler: async (args) => {
         const automationId = await resolveAutomationId({ resolveIdOrRequired, id: args.automationId, name: args.automationName })
 
+        if (args.action === 'restore') {
+          const result = await client.put(`/automations/${automationId}/node/${args.nodeId}`, { pendingDeletion: false, emailDeleted: false })
+          return textResult(`Restored the step (undid the pending deletion):\n\n${formatAutomationDetail(result)}`)
+        }
+
         if (args.action === 'delete') {
+          const { result: deletePreview } = await previewUnlessConfirmed({ client, resolveIdOrRequired, id: automationId, confirm: args.confirm, verb: 'deleting this step from the automation\'s sequence (if the automation is live/paused, this only stages the removal until merged)' })
+          if (deletePreview) {
+            return deletePreview
+          }
           const result = await client.del(`/automations/${automationId}/node/${args.nodeId}`)
           const staged = result.status !== 'draft' && result.draftSequence
           return textResult(`${staged ? 'Flagged the step for deletion (staged in the draft - not applied until merge_automation_draft)' : 'Deleted the step'}:\n\n${formatAutomationDetail(result)}`)
         }
 
-        if (args.action === 'restore') {
-          const result = await client.put(`/automations/${automationId}/node/${args.nodeId}`, { pendingDeletion: false, emailDeleted: false })
-          return textResult(`Restored the step (undid the pending deletion):\n\n${formatAutomationDetail(result)}`)
+        const verb = args.action === 'add' ? 'adding a new step to this automation\'s sequence' : 'updating this step in the automation\'s sequence'
+        const { result: preview } = await previewUnlessConfirmed({ client, resolveIdOrRequired, id: automationId, confirm: args.confirm, verb })
+        if (preview) {
+          return preview
         }
 
         const segmentId = await resolveIdOptional({ id: args.segmentId, name: args.segmentName, resourcePath: '/segments', filterField: 'name', label: 'segment' })

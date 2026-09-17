@@ -127,6 +127,16 @@ describe('manage_automation_trigger', () => {
     expect(result.content[0].text).toBe('When a contact is added to list list1.')
   })
 
+  test('set without confirm previews and does not call the API', async () => {
+    const { client, byName } = setup()
+    client.get.mockResolvedValue(baseAutomation)
+
+    const result = await byName.manage_automation_trigger.handler({ action: 'set', automationId: 'auto1', type: 'contact-added' })
+
+    expect(client.patch).not.toHaveBeenCalled()
+    expect(result.content[0].text).toContain('requires confirmation')
+  })
+
   test('set applies directly on a draft automation and resolves list/segment names', async () => {
     const { client, byName } = setup()
     client.get.mockImplementation(async path => {
@@ -145,7 +155,8 @@ describe('manage_automation_trigger', () => {
       automationId: 'auto1',
       type: 'enter-segment',
       subscriberListName: 'Newsletter',
-      segmentName: 'VIP'
+      segmentName: 'VIP',
+      confirm: true
     })
 
     expect(client.patch).toHaveBeenCalledWith('/automations/auto1/trigger', { type: 'enter-segment', subscriberListId: 'list1', segmentId: 'seg1' })
@@ -164,7 +175,8 @@ describe('manage_automation_trigger', () => {
       fromOperator: 'equals',
       fromValue: 'free',
       toOperator: 'equals',
-      toValue: 'pro'
+      toValue: 'pro',
+      confirm: true
     })
 
     expect(client.patch).toHaveBeenCalledWith('/automations/auto1/trigger', {
@@ -186,7 +198,8 @@ describe('manage_automation_trigger', () => {
       schedule: 'weekly',
       time: '10:00',
       dayOf: 'monday',
-      nthOf: 2
+      nthOf: 2,
+      confirm: true
     })
 
     expect(client.patch).toHaveBeenCalledWith('/automations/auto1/trigger', { type: 'time-based', schedule: 'weekly', time: '10:00', dayOf: 'monday', nthOf: 2 })
@@ -203,11 +216,21 @@ describe('manage_automation_exit_criteria', () => {
     expect(result.content[0].text).toContain('No exit criteria')
   })
 
+  test('clear without confirm previews and does not call the API', async () => {
+    const { client, byName } = setup()
+    client.get.mockResolvedValue(baseAutomation)
+
+    const result = await byName.manage_automation_exit_criteria.handler({ action: 'clear', automationId: 'auto1' })
+
+    expect(client.patch).not.toHaveBeenCalled()
+    expect(result.content[0].text).toContain('requires confirmation')
+  })
+
   test('clear applies directly when the result has no draftExitCriteria', async () => {
     const { client, byName } = setup()
     client.patch.mockResolvedValue({ exitCriteria: { active: false } })
 
-    const result = await byName.manage_automation_exit_criteria.handler({ action: 'clear', automationId: 'auto1' })
+    const result = await byName.manage_automation_exit_criteria.handler({ action: 'clear', automationId: 'auto1', confirm: true })
 
     expect(client.patch).toHaveBeenCalledWith('/automations/auto1/exit-criteria', { active: false })
     expect(result.content[0].text).toBe('Cleared the exit criteria.')
@@ -217,8 +240,18 @@ describe('manage_automation_exit_criteria', () => {
     const { client, byName } = setup()
     client.patch.mockResolvedValue({ draftExitCriteria: { active: false } })
 
-    const result = await byName.manage_automation_exit_criteria.handler({ action: 'clear', automationId: 'auto1' })
+    const result = await byName.manage_automation_exit_criteria.handler({ action: 'clear', automationId: 'auto1', confirm: true })
     expect(result.content[0].text).toBe('Staged clearing the exit criteria (not live until merged).')
+  })
+
+  test('set without confirm previews and does not call the API', async () => {
+    const { client, byName } = setup()
+    client.get.mockResolvedValue(baseAutomation)
+
+    const result = await byName.manage_automation_exit_criteria.handler({ action: 'set', automationId: 'auto1' })
+
+    expect(client.patch).not.toHaveBeenCalled()
+    expect(result.content[0].text).toContain('requires confirmation')
   })
 
   test('set resolves a segment name and reports the applied criteria', async () => {
@@ -226,7 +259,7 @@ describe('manage_automation_exit_criteria', () => {
     client.get.mockResolvedValue({ items: [{ _id: 'seg1' }] })
     client.patch.mockResolvedValue({ exitCriteria: { active: true, segmentId: 'seg1' } })
 
-    const result = await byName.manage_automation_exit_criteria.handler({ action: 'set', automationId: 'auto1', segmentName: 'Unengaged' })
+    const result = await byName.manage_automation_exit_criteria.handler({ action: 'set', automationId: 'auto1', segmentName: 'Unengaged', confirm: true })
 
     expect(client.patch).toHaveBeenCalledWith('/automations/auto1/exit-criteria', { active: true, segmentId: 'seg1' })
     expect(result.content[0].text).toContain('Set exit criteria:')
@@ -236,18 +269,28 @@ describe('manage_automation_exit_criteria', () => {
     const { client, byName } = setup()
     client.patch.mockResolvedValue({ exitCriteria: { active: false }, draftExitCriteria: { active: true, excludeUnengaged: true } })
 
-    const result = await byName.manage_automation_exit_criteria.handler({ action: 'set', automationId: 'auto1', excludeUnengaged: true })
+    const result = await byName.manage_automation_exit_criteria.handler({ action: 'set', automationId: 'auto1', excludeUnengaged: true, confirm: true })
 
     expect(result.content[0].text).toContain('staged as a draft change')
   })
 })
 
 describe('manage_automation_node', () => {
+  test('add without confirm previews and does not call the API', async () => {
+    const { client, byName } = setup()
+    client.get.mockResolvedValue(baseAutomation)
+
+    const result = await byName.manage_automation_node.handler({ action: 'add', automationId: 'auto1', nodeType: 'complete' })
+
+    expect(client.post).not.toHaveBeenCalled()
+    expect(result.content[0].text).toContain('requires confirmation')
+  })
+
   test('add posts the node without a prevNodeId', async () => {
     const { client, byName } = setup()
     client.post.mockResolvedValue(baseAutomation)
 
-    await byName.manage_automation_node.handler({ action: 'add', automationId: 'auto1', nodeType: 'complete' })
+    await byName.manage_automation_node.handler({ action: 'add', automationId: 'auto1', nodeType: 'complete', confirm: true })
 
     expect(client.post).toHaveBeenCalledWith('/automations/auto1/node', { type: 'complete' })
   })
@@ -256,7 +299,7 @@ describe('manage_automation_node', () => {
     const { client, byName } = setup()
     client.post.mockResolvedValue(baseAutomation)
 
-    await byName.manage_automation_node.handler({ action: 'add', automationId: 'auto1', nodeType: 'delay', prevNodeId: 'n1', duration: 2, durationType: 'day' })
+    await byName.manage_automation_node.handler({ action: 'add', automationId: 'auto1', nodeType: 'delay', prevNodeId: 'n1', duration: 2, durationType: 'day', confirm: true })
 
     expect(client.post).toHaveBeenCalledWith('/automations/auto1/node', { type: 'delay', duration: 2, durationType: 'day', prevNodeId: 'n1' })
   })
@@ -266,7 +309,7 @@ describe('manage_automation_node', () => {
     client.get.mockResolvedValue({ items: [{ _id: 'seg1' }] })
     client.post.mockResolvedValue(baseAutomation)
 
-    await byName.manage_automation_node.handler({ action: 'add', automationId: 'auto1', nodeType: 'filter-audience', segmentName: 'VIP', operator: 'any' })
+    await byName.manage_automation_node.handler({ action: 'add', automationId: 'auto1', nodeType: 'filter-audience', segmentName: 'VIP', operator: 'any', confirm: true })
 
     expect(client.post).toHaveBeenCalledWith('/automations/auto1/node', { type: 'filter-audience', operator: 'any', segmentId: 'seg1' })
   })
@@ -276,7 +319,7 @@ describe('manage_automation_node', () => {
     client.get.mockResolvedValue({ items: [{ _id: 'list1' }] })
     client.post.mockResolvedValue(baseAutomation)
 
-    await byName.manage_automation_node.handler({ action: 'add', automationId: 'auto1', nodeType: 'notify', subscriberListName: 'Newsletter', emails: ['a@example.com'] })
+    await byName.manage_automation_node.handler({ action: 'add', automationId: 'auto1', nodeType: 'notify', subscriberListName: 'Newsletter', emails: ['a@example.com'], confirm: true })
 
     expect(client.post).toHaveBeenCalledWith('/automations/auto1/node', { type: 'notify', subscriberListId: 'list1', emails: ['a@example.com'] })
   })
@@ -285,16 +328,26 @@ describe('manage_automation_node', () => {
     const { client, byName } = setup()
     client.post.mockResolvedValue(baseAutomation)
 
-    await byName.manage_automation_node.handler({ action: 'add', automationId: 'auto1', nodeType: 'webhook', url: 'https://example.com', method: 'POST', includeContactData: true })
+    await byName.manage_automation_node.handler({ action: 'add', automationId: 'auto1', nodeType: 'webhook', url: 'https://example.com', method: 'POST', includeContactData: true, confirm: true })
 
     expect(client.post).toHaveBeenCalledWith('/automations/auto1/node', { type: 'webhook', url: 'https://example.com', method: 'POST', includeContactData: true })
+  })
+
+  test('update without confirm previews and does not call the API', async () => {
+    const { client, byName } = setup()
+    client.get.mockResolvedValue(baseAutomation)
+
+    const result = await byName.manage_automation_node.handler({ action: 'update', automationId: 'auto1', nodeId: 'n1', duration: 5, durationType: 'day' })
+
+    expect(client.put).not.toHaveBeenCalled()
+    expect(result.content[0].text).toContain('requires confirmation')
   })
 
   test('update targets a node by id without requiring nodeType', async () => {
     const { client, byName } = setup()
     client.put.mockResolvedValue(baseAutomation)
 
-    await byName.manage_automation_node.handler({ action: 'update', automationId: 'auto1', nodeId: 'n1', duration: 5, durationType: 'day' })
+    await byName.manage_automation_node.handler({ action: 'update', automationId: 'auto1', nodeId: 'n1', duration: 5, durationType: 'day', confirm: true })
 
     expect(client.put).toHaveBeenCalledWith('/automations/auto1/node/n1', { duration: 5, durationType: 'day' })
   })
@@ -303,16 +356,26 @@ describe('manage_automation_node', () => {
     const { client, byName } = setup()
     client.put.mockResolvedValue(baseAutomation)
 
-    await byName.manage_automation_node.handler({ action: 'update', automationId: 'auto1', nodeId: 'b1', condition: true, property: 'plan', operator: 'equals', value: 'pro' })
+    await byName.manage_automation_node.handler({ action: 'update', automationId: 'auto1', nodeId: 'b1', condition: true, property: 'plan', operator: 'equals', value: 'pro', confirm: true })
 
     expect(client.put).toHaveBeenCalledWith('/automations/auto1/node/b1', { condition: { property: 'plan', operator: 'equals', value: 'pro' } })
+  })
+
+  test('delete without confirm previews and does not call the API', async () => {
+    const { client, byName } = setup()
+    client.get.mockResolvedValue(baseAutomation)
+
+    const result = await byName.manage_automation_node.handler({ action: 'delete', automationId: 'auto1', nodeId: 'n1' })
+
+    expect(client.del).not.toHaveBeenCalled()
+    expect(result.content[0].text).toContain('requires confirmation')
   })
 
   test('delete removes a node by id', async () => {
     const { client, byName } = setup()
     client.del.mockResolvedValue(baseAutomation)
 
-    const result = await byName.manage_automation_node.handler({ action: 'delete', automationId: 'auto1', nodeId: 'n1' })
+    const result = await byName.manage_automation_node.handler({ action: 'delete', automationId: 'auto1', nodeId: 'n1', confirm: true })
 
     expect(client.del).toHaveBeenCalledWith('/automations/auto1/node/n1')
     expect(result.content[0].text).toContain('Deleted the step:')
@@ -322,7 +385,7 @@ describe('manage_automation_node', () => {
     const { client, byName } = setup()
     client.del.mockResolvedValue({ ...baseAutomation, status: 'active', draftSequence: [{ _id: 'n1', type: 'delay', pendingDeletion: true }] })
 
-    const result = await byName.manage_automation_node.handler({ action: 'delete', automationId: 'auto1', nodeId: 'n1' })
+    const result = await byName.manage_automation_node.handler({ action: 'delete', automationId: 'auto1', nodeId: 'n1', confirm: true })
 
     expect(result.content[0].text).toContain('Flagged the step for deletion (staged in the draft - not applied until merge_automation_draft)')
     expect(result.content[0].text).toContain('[PENDING DELETION')
