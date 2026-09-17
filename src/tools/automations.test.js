@@ -420,9 +420,19 @@ describe('manage_automation_email_content', () => {
     expect(result.content[0].text).toContain('Body:\nHello!')
   })
 
+  test('update without confirm previews and does not call the API', async () => {
+    const { client, byName } = setup()
+    client.get.mockResolvedValue(baseAutomation)
+
+    const result = await byName.manage_automation_email_content.handler({ action: 'update', automationId: 'auto1', emailId: 'email1', subject: 'New subject' })
+
+    expect(client.patch).not.toHaveBeenCalled()
+    expect(result.content[0].text).toContain('requires confirmation')
+  })
+
   test('update sends every provided field', async () => {
     const { client, byName } = setup()
-    client.patch.mockResolvedValue({ _id: 'email1', subject: 'New subject' })
+    client.patch.mockResolvedValue({ _id: 'email1', automationId: 'auto1', subject: 'New subject' })
 
     await byName.manage_automation_email_content.handler({
       action: 'update',
@@ -433,7 +443,8 @@ describe('manage_automation_email_content', () => {
       bodyType: 'html',
       body: '<p>hi</p>',
       senderIdentityId: 'sender1',
-      replyTo: 'reply@example.com'
+      replyTo: 'reply@example.com',
+      confirm: true
     })
 
     expect(client.patch).toHaveBeenCalledWith('/automations/auto1/email/email1', {
@@ -446,11 +457,20 @@ describe('manage_automation_email_content', () => {
     })
   })
 
+  test('update reports staging when the result is a staged automation rather than the email document', async () => {
+    const { client, byName } = setup()
+    client.patch.mockResolvedValue({ ...baseAutomation, status: 'active', draftSequence: [{ _id: 'n1', type: 'send-email', emailId: 'email1', draftData: { subject: 'New subject' } }] })
+
+    const result = await byName.manage_automation_email_content.handler({ action: 'update', automationId: 'auto1', emailId: 'email1', subject: 'New subject', confirm: true })
+
+    expect(result.content[0].text).toContain('Staged the email content change (not live until merged)')
+  })
+
   test('update omits fields that were not given', async () => {
     const { client, byName } = setup()
-    client.patch.mockResolvedValue({ _id: 'email1', subject: 'Welcome' })
+    client.patch.mockResolvedValue({ _id: 'email1', automationId: 'auto1', subject: 'Welcome' })
 
-    await byName.manage_automation_email_content.handler({ action: 'update', automationId: 'auto1', emailId: 'email1', subject: 'Welcome' })
+    await byName.manage_automation_email_content.handler({ action: 'update', automationId: 'auto1', emailId: 'email1', subject: 'Welcome', confirm: true })
 
     expect(client.patch).toHaveBeenCalledWith('/automations/auto1/email/email1', { subject: 'Welcome' })
   })

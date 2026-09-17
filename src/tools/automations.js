@@ -49,7 +49,10 @@ function lifecycleTool ({ client, resolveIdOrRequired }, { name, title, pastTens
       if (result.hasErrors) {
         return textResult(`Validation failed - nothing was changed:\n\n${formatAutomationDetail(result)}`)
       }
-      return textResult(`${pastTense}:\n\n${formatAutomationDetail(result)}`)
+      const warning = result.runningAutomationUpdateFailures
+        ? `\n\nWarning: ${result.runningAutomationUpdateFailures} contact(s) already in this automation failed to update to the new sequence - they may still be on the old one.`
+        : ''
+      return textResult(`${pastTense}:\n\n${formatAutomationDetail(result)}${warning}`)
     }
   }
 }
@@ -332,7 +335,8 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           bodyType: z.enum(['html', 'text']).optional().describe('update only.'),
           body: z.string().optional().describe('update only - HTML/text content. This tool cannot author the visual (Chamaileon) editor format.'),
           senderIdentityId: z.string().optional().describe('update only.'),
-          replyTo: z.string().optional().describe('update only.')
+          replyTo: z.string().optional().describe('update only.'),
+          confirm: z.boolean().optional().describe(`update only. ${CONFIRM_DESCRIPTION}`)
         }
       },
       handler: async (args) => {
@@ -342,6 +346,11 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           const email = await client.get(`/automations/${automationId}/email/${args.emailId}`)
           const type = email.type || 'chamaileon'
           return textResult(`"${email.subject || '(no subject yet)'}" (id ${email._id})\nPreview text: ${email.previewText || '(none)'}\nType: ${type}${type === 'chamaileon' ? '' : `\nBody:\n${email.document}`}`)
+        }
+
+        const { result: preview } = await previewUnlessConfirmed({ client, resolveIdOrRequired, id: automationId, confirm: args.confirm, verb: 'updating this step\'s email content (subject, body, etc.)' })
+        if (preview) {
+          return preview
         }
 
         const body = {}
@@ -364,8 +373,11 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           body.replyTo = args.replyTo
         }
 
-        const email = await client.patch(`/automations/${automationId}/email/${args.emailId}`, body)
-        return textResult(`Updated email content:\n"${email.subject}" (id ${email._id})`)
+        const result = await client.patch(`/automations/${automationId}/email/${args.emailId}`, body)
+        if (result.automationId === undefined) {
+          return textResult(`Staged the email content change (not live until merged):\n\n${formatAutomationDetail(result)}`)
+        }
+        return textResult(`Updated email content:\n"${result.subject}" (id ${result._id})`)
       }
     },
     lifecycleTool({ client, resolveIdOrRequired }, {
