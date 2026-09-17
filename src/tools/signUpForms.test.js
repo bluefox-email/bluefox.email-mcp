@@ -109,6 +109,19 @@ describe('create_signup_form', () => {
       }
     })
   })
+
+  test('creates a published form with a slug', async () => {
+    const { client, create_signup_form: createSignUpForm } = setup()
+    client.post.mockResolvedValue({ _id: 'form123', name: 'Newsletter form' })
+
+    await createSignUpForm.handler({ name: 'Newsletter form', published: true, slug: 'newsletter' })
+
+    expect(client.post).toHaveBeenCalledWith('/signup-forms', {
+      name: 'Newsletter form',
+      published: true,
+      slug: 'newsletter'
+    })
+  })
 })
 
 describe('update_signup_form', () => {
@@ -280,6 +293,16 @@ describe('update_signup_form', () => {
     expect(client.patch).toHaveBeenCalledWith('/signup-forms/form123', { subscriberListIds: ['list123', 'list456'] })
   })
 
+  test('publishes an existing form by setting published and slug', async () => {
+    const { client, update_signup_form: updateSignUpForm } = setup()
+    client.patch.mockResolvedValue({ name: 'Newsletter form' })
+
+    await updateSignUpForm.handler({ signUpFormId: 'form123', published: true, slug: 'newsletter' })
+
+    expect(client.get).not.toHaveBeenCalled()
+    expect(client.patch).toHaveBeenCalledWith('/signup-forms/form123', { published: true, slug: 'newsletter' })
+  })
+
   test('merges per-field contact field settings into the existing propertiesStyle, preserving other fields and unmentioned sub-keys', async () => {
     const { client, update_signup_form: updateSignUpForm } = setup()
     client.get.mockResolvedValue({
@@ -345,7 +368,18 @@ describe('get_signup_form', () => {
 
     expect(client.get).toHaveBeenCalledWith('/signup-forms', { limit: 30 })
     expect(result.content[0].text).toContain('1 signup form(s)')
-    expect(result.content[0].text).toContain('"Newsletter form" (id form123) - captcha: turnstile, double opt-in: on, lists: 1.')
+    expect(result.content[0].text).toContain('"Newsletter form" (id form123) - captcha: turnstile, double opt-in: on, lists: 1, not published.')
+  })
+
+  test('shows the hosted page path in the list view when published', async () => {
+    const { client, get_signup_form: getSignUpForm } = setup()
+    client.get.mockResolvedValue({
+      count: 1,
+      items: [{ _id: 'form123', name: 'Newsletter form', published: true, slug: 'newsletter' }]
+    })
+
+    const result = await getSignUpForm.handler({})
+    expect(result.content[0].text).toContain('published at /signup/newsletter')
   })
 
   test('shows no captcha in the list view when showCaptcha is explicitly false', async () => {
@@ -408,6 +442,7 @@ describe('get_signup_form', () => {
     const text = result.content[0].text
 
     expect(text).toContain('"Newsletter form" (id form123)')
+    expect(text).toContain('Not published (no slug set yet).')
     expect(text).toContain('Target lists: 1')
     expect(text).toContain('Redirect after signup (redirectLink): https://example.com/thanks')
     expect(text).toContain('Terms and conditions: shown - "I agree to the Terms" -> https://example.com/terms')
@@ -445,6 +480,22 @@ describe('get_signup_form', () => {
 
     const result = await getSignUpForm.handler({ signUpFormId: 'form123' })
     expect(result.content[0].text).toContain('Captcha: turnstile (theme dark, size compact, appearance always)')
+  })
+
+  test('reports the hosted page path when published', async () => {
+    const { client, get_signup_form: getSignUpForm } = setup()
+    client.get.mockResolvedValue({ _id: 'form123', name: 'Newsletter form', published: true, slug: 'newsletter' })
+
+    const result = await getSignUpForm.handler({ signUpFormId: 'form123' })
+    expect(result.content[0].text).toContain('Published - reachable on BlueFox\'s own hosted page at /signup/newsletter (no website of the user\'s own required).')
+  })
+
+  test('notes a slug is set but unpublished, distinct from no slug at all', async () => {
+    const { client, get_signup_form: getSignUpForm } = setup()
+    client.get.mockResolvedValue({ _id: 'form123', name: 'Newsletter form', slug: 'newsletter' })
+
+    const result = await getSignUpForm.handler({ signUpFormId: 'form123' })
+    expect(result.content[0].text).toContain('Not published (slug "newsletter" set but published is off).')
   })
 })
 
