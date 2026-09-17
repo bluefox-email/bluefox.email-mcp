@@ -65,6 +65,42 @@ describe('update_email', () => {
     expect(result.content[0].text).toContain('scheduled for 2026-08-01T08:00:00.000Z (time zone: America/New_York)')
   })
 
+  test('(re)schedules a campaign from scheduledFor alone, defaulting status to "scheduled" and normalising the instant', async () => {
+    const { client, update_email: updateEmail } = setup()
+    client.patch.mockResolvedValue({ _id: 'campaign123', name: 'Summer Sale' })
+
+    await updateEmail.handler({
+      type: 'campaign',
+      emailId: 'campaign123',
+      scheduledFor: '2026-09-10T08:00:00-05:00'
+    })
+
+    expect(client.patch).toHaveBeenCalledWith('/campaigns/campaign123', {
+      status: 'scheduled',
+      scheduledTo: '2026-09-10T13:00:00.000Z'
+    })
+  })
+
+  test('cancels a scheduled campaign with status "draft" alone, leaving scheduledTo untouched', async () => {
+    const { client, update_email: updateEmail } = setup()
+    client.patch.mockResolvedValue({ _id: 'campaign123', name: 'Summer Sale' })
+
+    await updateEmail.handler({ type: 'campaign', emailId: 'campaign123', status: 'draft' })
+
+    expect(client.patch).toHaveBeenCalledWith('/campaigns/campaign123', { status: 'draft' })
+  })
+
+  test('rejects an unparseable scheduledFor instead of forwarding it', async () => {
+    const { client, update_email: updateEmail } = setup()
+
+    await expect(updateEmail.handler({
+      type: 'campaign',
+      emailId: 'campaign123',
+      scheduledFor: 'next tuesday'
+    })).rejects.toThrow('is not a valid date-time')
+    expect(client.patch).not.toHaveBeenCalled()
+  })
+
   test('does not send excludeUnengaged for a transactional email even if given', async () => {
     const { client, update_email: updateEmail } = setup()
     client.patch.mockResolvedValue({ name: 'Order Confirmation' })

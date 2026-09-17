@@ -17,11 +17,20 @@ export function createProjectSettingsTools ({ client }) {
       name: 'manage_project_settings',
       config: {
         title: 'Get or update project settings',
-        description: 'Reads or updates this project\'s own settings - its name, logo, the segment that defines "unengaged" contacts (used by excludeUnengaged on campaigns/triggered emails), what happens to a contact automatically when they bounce or complain, and the domain whitelist. Note: API keys cannot be read or changed through this tool.',
+        description: 'Reads or updates this project\'s own settings - its name, logo, a custom subscription preferences page, the segment that defines "unengaged" contacts (used by excludeUnengaged on campaigns/triggered emails), what happens to a contact automatically when they bounce or complain, and the domain whitelist. Note: API keys cannot be read or changed through this tool.',
         inputSchema: {
           action: z.enum(['get', 'update']),
           name: z.string().optional().describe('update only.'),
           logoUrl: z.string().optional().describe('update only. Pass an empty string to remove the logo.'),
+          customSubscriptionPreferencesUrl: z.string().optional().describe(
+            'update only. A subscriber-facing page you host yourself for managing subscription preferences - when set, unsubscribe/pause links in emails point here instead of bluefox.email\'s default page. Send an explicit http:// or https:// scheme to have it kept exactly as given (e.g. "http://localhost:3000/preferences" while building/testing the page locally) - otherwise https is assumed. Pass an empty string to revert to the default page.\n\n' +
+            'Building this page? It never needs and should never hold the project\'s API key - the ONLY credential it ever sees is the `?token=<jwt>` query parameter bluefox.email appends to the link, and everything the page needs comes from that one string:\n\n' +
+            '1. The link gives you ONLY the token, not a projectId or email - the page must read those out of the token itself. It is a standard three-part JWT (`header.payload.signature`) - base64url-decode the middle (payload) part and JSON-parse it to get `projectId`, `email`, and `type` ("unsubscribe" or "pause-subscription"); no verification needed client-side, this is just reading data. Do NOT decode the header/signature or attempt to construct/modify a token - it is opaque otherwise, and always sent to the API exactly as received.\n' +
+            '2. With projectId and email in hand, GET /v1/projectId/{projectId}/subscriber-lists/public/{email} - Authorization: Bearer <the raw token string, unmodified> - to render the page. Response: { result: { items: [{ _id, name, description, private, subscriber: { status, pausedUntil, email, name, ... } }], count, logoUrl } }. `subscriber` is present only on lists this email has ever subscribed to (any status) - omitted entirely means "not subscribed, offer to join". `status` is one of "unverified" | "active" | "unsubscribed" | "paused"; `pausedUntil` (ISO date string) is only meaningful when status is "paused".\n' +
+            '3. To change one list, same bearer token: PATCH /v1/projectId/{projectId}/subscriber-lists/{id}/subscribers/{email} with a JSON body { status } - status is "active" (resubscribe), "unsubscribed", or "paused" (also requires pausedUntil, an ISO date string in the future). To join a list this email is not on at all, POST /v1/projectId/{projectId}/subscriber-lists/{id}/subscribers with { email, status: "active" } instead (email in the body must match the token\'s own email).\n' +
+            '4. Auth scope: the token authorizes its email on every PUBLIC list in the project via all three calls above - a PRIVATE list is only reachable if the token\'s own payload names that exact list as `subscriberListId` (this only happens for links generated from an email sent to that one private list). GET silently omits private lists the token cannot access; PATCH/POST on one return 403.\n' +
+            'Same token for every call on that page load - never decode-and-forget it, never generate your own, never persist it beyond the page session.'
+          ),
           unengagedContactSegmentGroups: groupsSchema.optional().describe('update only. Replaces the whole "unengaged" segment definition.'),
           autoRemoveOnBounce: z.enum(['off', 'removeFromLists', 'deleteContact']).optional().describe('update only. Defaults to removeFromLists. "off" leaves the contact\'s subscriptions untouched, "removeFromLists" unsubscribes them from every list, "deleteContact" also deletes the contact entirely.'),
           autoRemoveOnComplaint: z.enum(['off', 'removeFromLists', 'deleteContact']).optional().describe('update only. Same modes as autoRemoveOnBounce, applied on a spam complaint instead.'),
@@ -33,7 +42,7 @@ export function createProjectSettingsTools ({ client }) {
           const project = await client.get('')
           const autoRemove = project.autoRemoveFromList || {}
           return textResult(
-            `Project "${project.name}" - status: ${project.status}, logoUrl: ${project.logoUrl || 'none'}, ` +
+            `Project "${project.name}" - status: ${project.status}, logoUrl: ${project.logoUrl || 'none'}, custom subscription preferences URL: ${project.customSubscriptionPreferencesUrl || 'none (using bluefox.email\'s default page)'}, ` +
             `auto-remove on bounce: ${autoRemove.bounce || 'removeFromLists'}, auto-remove on complaint: ${autoRemove.complaint || 'removeFromLists'}, ` +
             `domain whitelist: ${project.whiteList?.length ? project.whiteList.join(', ') : 'none'}.\n` +
             `Unengaged contact segment: ${formatUnengagedSegment(project.unengagedContactSegment)}`
@@ -46,6 +55,9 @@ export function createProjectSettingsTools ({ client }) {
         }
         if (args.logoUrl !== undefined) {
           body.logoUrl = args.logoUrl
+        }
+        if (args.customSubscriptionPreferencesUrl !== undefined) {
+          body.customSubscriptionPreferencesUrl = args.customSubscriptionPreferencesUrl
         }
         if (args.unengagedContactSegmentGroups) {
           body.unengagedContactSegment = { groups: args.unengagedContactSegmentGroups }
@@ -66,7 +78,7 @@ export function createProjectSettingsTools ({ client }) {
         const result = await client.patch('', body)
         const autoRemove = result.autoRemoveFromList || {}
         return textResult(
-          `Updated project "${result.name}" - status: ${result.status}, logoUrl: ${result.logoUrl || 'none'}, ` +
+          `Updated project "${result.name}" - status: ${result.status}, logoUrl: ${result.logoUrl || 'none'}, custom subscription preferences URL: ${result.customSubscriptionPreferencesUrl || 'none (using bluefox.email\'s default page)'}, ` +
           `auto-remove on bounce: ${autoRemove.bounce || 'removeFromLists'}, auto-remove on complaint: ${autoRemove.complaint || 'removeFromLists'}, ` +
           `domain whitelist: ${result.whiteList?.length ? result.whiteList.join(', ') : 'none'}.\n` +
           `Unengaged contact segment: ${formatUnengagedSegment(result.unengagedContactSegment)}`

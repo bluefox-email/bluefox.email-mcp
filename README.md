@@ -1,6 +1,6 @@
 # bluefox.email MCP server
 
-**What this is:** a small local program that lets an AI agent (Claude Desktop, Claude Code, or any other
+**What this is:** a small local program that lets an AI agent (Claude Desktop, Claude Code, Codex CLI, or any other
 [MCP](https://modelcontextprotocol.io)-compatible client) manage your [bluefox.email](https://bluefox.email)
 account directly - creating campaigns, sending emails, managing contacts and subscriber lists, and more - just by
 you asking in plain language. No API docs, no writing code, no copy-pasting HTTP requests.
@@ -95,10 +95,23 @@ claude mcp add bluefox-email \
 
 **Windows:** replace the last line with `-- cmd /c bluefox.email-mcp.cmd` (see the Windows note above).
 
-**ChatGPT**: as of now, ChatGPT's MCP support (Settings > Connectors) expects a server reachable at a URL, not a
-local command - so this local server can't be connected from ChatGPT directly. If you want AI-agent access to
-bluefox.email from ChatGPT specifically, use the REST API + OpenAPI spec instead (see your Project Settings >
-Integrations page in the app).
+**Codex CLI** also uses a single command instead of a config file:
+
+```bash
+codex mcp add bluefox-email \
+  --env BLUEFOX_BASE_URL=https://api.bluefox.email \
+  --env BLUEFOX_PROJECT_ID=YOUR_PROJECT_ID \
+  --env BLUEFOX_API_KEY=YOUR_API_KEY \
+  -- bluefox.email-mcp
+```
+
+**Windows:** replace the last line with `-- cmd /c bluefox.email-mcp.cmd` (see the Windows note above).
+
+**ChatGPT (the web/app chat product)**: as of now, ChatGPT's MCP support (Settings > Connectors) expects a server
+reachable at a URL, not a local command - so this local server can't be connected from ChatGPT directly. This is
+separate from **Codex CLI** above, which does support local stdio servers. If you want AI-agent access to
+bluefox.email from the ChatGPT web app specifically, use the REST API + OpenAPI spec instead (see your Project
+Settings > Integrations page in the app).
 
 Once connected, start a new chat and ask it to do something with your bluefox.email project.
 

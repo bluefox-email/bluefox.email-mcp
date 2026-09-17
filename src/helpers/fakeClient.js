@@ -8,6 +8,7 @@ export function createFakeClient (overrides = {}) {
     patch: vi.fn(),
     del: vi.fn(),
     getText: vi.fn(),
+    postForm: vi.fn(),
     ...overrides
   }
 }

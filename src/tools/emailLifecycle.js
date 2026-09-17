@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { textResult } from '../helpers/errors.js'
+import { normalizeScheduledFor } from '../helpers/scheduledFor.js'
 import { feedsSchema } from './feedsSchema.js'
 
 const RESOURCE_PATH = {
@@ -93,9 +94,9 @@ export function createEmailLifecycleTools ({ client, resolveId, resolveIdOptiona
           subscriberListName: z.string().optional().describe('Campaign/triggered only. Looked up automatically.'),
           segmentId: z.string().optional().describe('Campaign only.'),
           segmentName: z.string().optional().describe('Campaign only. Looked up automatically.'),
-          status: z.enum(['draft', 'archive', 'scheduled']).optional().describe('Campaign only. Set to "draft" to cancel a scheduled send.'),
-          scheduledFor: z.string().optional().describe('Campaign only. ISO 8601 date-time - resolve relative phrases like "tomorrow at 8am" to an absolute value yourself first. Set alongside status "scheduled" to (re)schedule.'),
-          timeZone: z.string().optional().describe('Campaign only. IANA time zone (e.g. "America/New_York") used to interpret scheduledFor.'),
+          status: z.enum(['draft', 'archive', 'scheduled']).optional().describe('Campaign only. Set to "draft" to cancel a scheduled send. Passing scheduledFor on its own already (re)schedules - status defaults to "scheduled" then.'),
+          scheduledFor: z.string().optional().describe('Campaign only. Absolute ISO 8601 date-time with a UTC offset or trailing "Z" (e.g. "2026-09-10T08:00:00-05:00") - resolve relative phrases like "tomorrow at 8am" to an absolute instant yourself first. Pass this to (re)schedule the campaign.'),
+          timeZone: z.string().optional().describe('Campaign only. IANA time zone (e.g. "America/New_York") stored with the campaign and shown next to the scheduled time in the app. It does NOT shift scheduledFor.'),
           excludeUnengaged: z.boolean().optional().describe('Campaign/triggered only.')
         }
       },
@@ -163,11 +164,11 @@ export function createEmailLifecycleTools ({ client, resolveId, resolveIdOptiona
           if (segmentId) {
             body.segmentId = segmentId
           }
-          if (args.status) {
-            body.status = args.status
-          }
           if (args.scheduledFor) {
-            body.scheduledTo = args.scheduledFor
+            body.scheduledTo = normalizeScheduledFor(args.scheduledFor)
+            body.status = args.status || 'scheduled'
+          } else if (args.status) {
+            body.status = args.status
           }
           if (args.timeZone) {
             body.timeZone = args.timeZone
