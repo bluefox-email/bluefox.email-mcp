@@ -9,12 +9,14 @@ const directStyleFields = [
   'turnstileSize', 'turnstileAppearance', 'emailPlaceholder', 'captchaPlaceholder', 'formFontStyle',
   'formFontColor', 'formFontSize', 'btnLabel', 'btnFont', 'btnFontColor', 'btnColor', 'btnFontSize',
   'successMessage', 'successFont', 'successFontColor', 'successFontSize', 'redirectLink',
-  'published', 'slug'
+  'published', 'slug', 'pageHeadline', 'pageDescription'
 ]
 
 const publishSchema = {
   published: z.boolean().optional().describe('When true, this form is reachable on BlueFox\'s own hosted page at /signup/{slug} - no website of the user\'s own required. Requires a slug (either set here or already on the form) - publishing without one is rejected.'),
-  slug: z.string().optional().describe('URL-friendly id for the hosted /signup/{slug} page. Normalized automatically (lowercased, non-alphanumerics collapsed to hyphens) and must be unique across every project - rejected if another form already has it. A form has no slug (and so cannot be published) until one is set explicitly; none is generated automatically.')
+  slug: z.string().optional().describe('URL-friendly id for the hosted /signup/{slug} page. Normalized automatically (lowercased, non-alphanumerics collapsed to hyphens) and must be unique across every project - rejected if another form already has it. If normalization leaves nothing (e.g. a slug of just punctuation), it is silently dropped rather than erroring - unless published is also true, in which case that is rejected the same as leaving slug out entirely. A form has no slug (and so cannot be published) until one is set explicitly; none is generated automatically.'),
+  pageHeadline: z.string().optional().describe('Heading shown at the top of the BlueFox-hosted signup page. Falls back to the project name if not set.'),
+  pageDescription: z.string().optional().describe('A line or two shown under the headline on the BlueFox-hosted signup page, explaining what people are signing up for.')
 }
 
 const styleSchema = {
@@ -113,6 +115,7 @@ function formatFormDetail (item) {
     item.published
       ? `Published - reachable on BlueFox's own hosted page at /signup/${item.slug} (no website of the user's own required).`
       : `Not published${item.slug ? ` (slug "${item.slug}" set but published is off)` : ' (no slug set yet)'}.`,
+    `Hosted page headline: ${item.pageHeadline ? `"${item.pageHeadline}"` : '(none set - falls back to the project name)'}. Description: ${item.pageDescription ? `"${item.pageDescription}"` : '(none set)'}.`,
     `Target lists: ${item.subscriberListIds?.length || 0}`,
     `Layout: ${item.formLayout}. Captcha: ${item.captchaType || (item.showCaptcha === false ? 'none' : 'svg')}${item.captchaType === 'turnstile' ? ` (theme ${item.turnstileTheme}, size ${item.turnstileSize}, appearance ${item.turnstileAppearance})` : ''}.`,
     `Email placeholder: "${item.emailPlaceholder}". Captcha placeholder: "${item.captchaPlaceholder}".`,

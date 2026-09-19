@@ -122,6 +122,19 @@ describe('create_signup_form', () => {
       slug: 'newsletter'
     })
   })
+
+  test('creates a form with a page headline and description', async () => {
+    const { client, create_signup_form: createSignUpForm } = setup()
+    client.post.mockResolvedValue({ _id: 'form123', name: 'Newsletter form' })
+
+    await createSignUpForm.handler({ name: 'Newsletter form', pageHeadline: 'Join our newsletter', pageDescription: 'Fresh updates, once a month.' })
+
+    expect(client.post).toHaveBeenCalledWith('/signup-forms', {
+      name: 'Newsletter form',
+      pageHeadline: 'Join our newsletter',
+      pageDescription: 'Fresh updates, once a month.'
+    })
+  })
 })
 
 describe('update_signup_form', () => {
@@ -301,6 +314,18 @@ describe('update_signup_form', () => {
 
     expect(client.get).not.toHaveBeenCalled()
     expect(client.patch).toHaveBeenCalledWith('/signup-forms/form123', { published: true, slug: 'newsletter' })
+  })
+
+  test('updates the page headline and description', async () => {
+    const { client, update_signup_form: updateSignUpForm } = setup()
+    client.patch.mockResolvedValue({ name: 'Newsletter form' })
+
+    await updateSignUpForm.handler({ signUpFormId: 'form123', pageHeadline: 'Join our newsletter', pageDescription: 'Fresh updates, once a month.' })
+
+    expect(client.patch).toHaveBeenCalledWith('/signup-forms/form123', {
+      pageHeadline: 'Join our newsletter',
+      pageDescription: 'Fresh updates, once a month.'
+    })
   })
 
   test('merges per-field contact field settings into the existing propertiesStyle, preserving other fields and unmentioned sub-keys', async () => {
@@ -496,6 +521,22 @@ describe('get_signup_form', () => {
 
     const result = await getSignUpForm.handler({ signUpFormId: 'form123' })
     expect(result.content[0].text).toContain('Not published (slug "newsletter" set but published is off).')
+  })
+
+  test('reports the hosted page headline and description when set', async () => {
+    const { client, get_signup_form: getSignUpForm } = setup()
+    client.get.mockResolvedValue({ _id: 'form123', name: 'Newsletter form', pageHeadline: 'Join our newsletter', pageDescription: 'Fresh updates, once a month.' })
+
+    const result = await getSignUpForm.handler({ signUpFormId: 'form123' })
+    expect(result.content[0].text).toContain('Hosted page headline: "Join our newsletter". Description: "Fresh updates, once a month.".')
+  })
+
+  test('reports headline and description as unset when neither is given', async () => {
+    const { client, get_signup_form: getSignUpForm } = setup()
+    client.get.mockResolvedValue({ _id: 'form123', name: 'Newsletter form' })
+
+    const result = await getSignUpForm.handler({ signUpFormId: 'form123' })
+    expect(result.content[0].text).toContain('Hosted page headline: (none set - falls back to the project name). Description: (none set).')
   })
 })
 
