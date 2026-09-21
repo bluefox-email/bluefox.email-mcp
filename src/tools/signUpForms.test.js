@@ -135,6 +135,18 @@ describe('create_signup_form', () => {
       pageDescription: 'Fresh updates, once a month.'
     })
   })
+
+  test('creates a form opted out of BlueFox\'s default Turnstile on the hosted page', async () => {
+    const { client, create_signup_form: createSignUpForm } = setup()
+    client.post.mockResolvedValue({ _id: 'form123', name: 'Newsletter form' })
+
+    await createSignUpForm.handler({ name: 'Newsletter form', useDefaultTurnstile: false })
+
+    expect(client.post).toHaveBeenCalledWith('/signup-forms', {
+      name: 'Newsletter form',
+      useDefaultTurnstile: false
+    })
+  })
 })
 
 describe('update_signup_form', () => {
@@ -537,6 +549,22 @@ describe('get_signup_form', () => {
 
     const result = await getSignUpForm.handler({ signUpFormId: 'form123' })
     expect(result.content[0].text).toContain('Hosted page headline: (none set - falls back to the project name). Description: (none set).')
+  })
+
+  test('reports BlueFox\'s default Turnstile as active by default', async () => {
+    const { client, get_signup_form: getSignUpForm } = setup()
+    client.get.mockResolvedValue({ _id: 'form123', name: 'Newsletter form' })
+
+    const result = await getSignUpForm.handler({ signUpFormId: 'form123' })
+    expect(result.content[0].text).toContain('Hosted page Turnstile: BlueFox\'s own Turnstile (default) - only applies to the hosted page, not the embed.')
+  })
+
+  test('reports the hosted page as using its own captcha settings when useDefaultTurnstile is false', async () => {
+    const { client, get_signup_form: getSignUpForm } = setup()
+    client.get.mockResolvedValue({ _id: 'form123', name: 'Newsletter form', useDefaultTurnstile: false })
+
+    const result = await getSignUpForm.handler({ signUpFormId: 'form123' })
+    expect(result.content[0].text).toContain('Hosted page Turnstile: using this form\'s own captchaType settings - only applies to the hosted page, not the embed.')
   })
 })
 
