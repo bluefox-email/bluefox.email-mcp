@@ -2,15 +2,16 @@ export function formatTrigger (trigger) {
   if (!trigger || !trigger.type) {
     return 'No trigger configured yet.'
   }
+  const runOnce = trigger.runOnce === false ? ' A contact CAN re-enter this automation every time the trigger matches again (runOnce is off).' : ''
   switch (trigger.type) {
     case 'contact-added':
-      return `When a contact is added to list ${trigger.subscriberListId}.`
+      return `When a contact is added to list ${trigger.subscriberListId}.${runOnce}`
     case 'contact-updated':
-      return `When a contact on list ${trigger.subscriberListId} has "${trigger.property}" changed${trigger.from?.operator ? ` from ${trigger.from.operator} ${JSON.stringify(trigger.from.value)}` : ''}${trigger.to?.operator ? ` to ${trigger.to.operator} ${JSON.stringify(trigger.to.value)}` : ''}.`
+      return `When a contact on list ${trigger.subscriberListId} has "${trigger.property}" changed${trigger.from?.operator ? ` from ${trigger.from.operator} ${JSON.stringify(trigger.from.value)}` : ''}${trigger.to?.operator ? ` to ${trigger.to.operator} ${JSON.stringify(trigger.to.value)}` : ''}.${runOnce}`
     case 'enter-segment':
-      return `When a contact on list ${trigger.subscriberListId} enters segment ${trigger.segmentId}.`
+      return `When a contact on list ${trigger.subscriberListId} enters segment ${trigger.segmentId}.${runOnce}`
     case 'leave-segment':
-      return `When a contact on list ${trigger.subscriberListId} leaves segment ${trigger.segmentId}.`
+      return `When a contact on list ${trigger.subscriberListId} leaves segment ${trigger.segmentId}.${runOnce}`
     case 'time-based': {
       const dayOf = trigger.dayOf !== undefined ? `, day ${JSON.stringify(trigger.dayOf)}` : ''
       const nthOf = trigger.nthOf !== undefined ? `, occurrence ${trigger.nthOf}` : ''

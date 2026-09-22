@@ -37,6 +37,14 @@ describe('formatTrigger', () => {
     expect(formatTrigger({ type: 'time-based', subscriberListId: 'list1', schedule: 'daily' })).toBe('On a daily schedule at 09:00, for every contact on list list1.')
   })
 
+  test('contact-added notes when runOnce is disabled', () => {
+    expect(formatTrigger({ type: 'contact-added', subscriberListId: 'list1', runOnce: false })).toBe('When a contact is added to list list1. A contact CAN re-enter this automation every time the trigger matches again (runOnce is off).')
+  })
+
+  test('contact-added says nothing extra when runOnce is true (the default)', () => {
+    expect(formatTrigger({ type: 'contact-added', subscriberListId: 'list1', runOnce: true })).toBe('When a contact is added to list list1.')
+  })
+
   test('unrecognized trigger type', () => {
     expect(formatTrigger({ type: 'mystery' })).toBe('Unrecognized trigger type "mystery".')
   })

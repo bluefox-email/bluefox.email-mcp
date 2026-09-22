@@ -172,6 +172,15 @@ describe('manage_automation_trigger', () => {
     expect(result.content[0].text).not.toContain('staged')
   })
 
+  test('set forwards runOnce: false so a contact can re-enter the automation', async () => {
+    const { client, byName } = setup()
+    client.patch.mockResolvedValue({ trigger: { type: 'contact-added', runOnce: false } })
+
+    await byName.manage_automation_trigger.handler({ action: 'set', automationId: 'auto1', type: 'contact-added', runOnce: false, confirm: true })
+
+    expect(client.patch).toHaveBeenCalledWith('/automations/auto1/trigger', { type: 'contact-added', runOnce: false })
+  })
+
   test('set on a contact-updated trigger includes property and from/to', async () => {
     const { client, byName } = setup()
     client.patch.mockResolvedValue({ trigger: { type: 'contact-updated' } })
@@ -313,6 +322,24 @@ describe('manage_automation_node', () => {
     expect(client.post).toHaveBeenCalledWith('/automations/auto1/node', { type: 'complete' })
   })
 
+  test('add nodeType "condition" without prevNodeId is rejected instead of corrupting the sequence', async () => {
+    const { client, byName } = setup()
+
+    const result = await byName.manage_automation_node.handler({ action: 'add', automationId: 'auto1', nodeType: 'condition', operator: 'equals', property: 'plan', value: 'pro', confirm: true })
+
+    expect(client.post).not.toHaveBeenCalled()
+    expect(result.content[0].text).toContain('prevNodeId is required')
+  })
+
+  test('add nodeType "condition" with prevNodeId nests the criteria under condition, to append a new branch arm', async () => {
+    const { client, byName } = setup()
+    client.post.mockResolvedValue(baseAutomation)
+
+    await byName.manage_automation_node.handler({ action: 'add', automationId: 'auto1', nodeType: 'condition', prevNodeId: 'branch1', operator: 'equals', property: 'plan', value: 'pro', confirm: true })
+
+    expect(client.post).toHaveBeenCalledWith('/automations/auto1/node', { type: 'condition', prevNodeId: 'branch1', condition: { property: 'plan', operator: 'equals', value: 'pro' } })
+  })
+
   test('add with a prevNodeId and delay fields', async () => {
     const { client, byName } = setup()
     client.post.mockResolvedValue(baseAutomation)
@@ -447,6 +474,14 @@ describe('manage_automation_email_content', () => {
     expect(result.content[0].text).toContain('Body:\nHello!')
   })
 
+  test('get lists configured feeds', async () => {
+    const { client, byName } = setup()
+    client.get.mockResolvedValue({ _id: 'email1', subject: 'Digest', type: 'html', document: 'body', feeds: [{ url: 'https://example.com/rss', feedType: 'rss-xml', variableName: 'news' }] })
+
+    const result = await byName.manage_automation_email_content.handler({ action: 'get', automationId: 'auto1', emailId: 'email1' })
+    expect(result.content[0].text).toContain('Feeds: news (rss-xml, https://example.com/rss)')
+  })
+
   test('update without confirm previews and does not call the API', async () => {
     const { client, byName } = setup()
     client.get.mockResolvedValue(baseAutomation)
@@ -482,6 +517,16 @@ describe('manage_automation_email_content', () => {
       senderIdentity: 'sender1',
       replyTo: 'reply@example.com'
     })
+  })
+
+  test('update sends feeds', async () => {
+    const { client, byName } = setup()
+    client.patch.mockResolvedValue({ _id: 'email1', automationId: 'auto1' })
+
+    const feeds = [{ url: 'https://example.com/rss', feedType: 'rss-xml', variableName: 'news' }]
+    await byName.manage_automation_email_content.handler({ action: 'update', automationId: 'auto1', emailId: 'email1', feeds, confirm: true })
+
+    expect(client.patch).toHaveBeenCalledWith('/automations/auto1/email/email1', { feeds })
   })
 
   test('update reports staging when the result is a staged automation rather than the email document', async () => {

@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { textResult } from '../helpers/errors.js'
 import { formatAutomationDetail, formatAutomationSummaryLine, formatTrigger, formatExitCriteria } from './automationFormat.js'
 
-const NODE_TYPES = ['delay', 'send-email', 'filter-audience', 'branch', 'complete', 'set-value', 'notify', 'manage-tags', 'webhook']
+const NODE_TYPES = ['delay', 'send-email', 'filter-audience', 'branch', 'complete', 'set-value', 'notify', 'manage-tags', 'webhook', 'condition']
 
 const TRIGGER_TYPES = ['contact-added', 'contact-updated', 'enter-segment', 'leave-segment', 'time-based']
 
@@ -40,6 +40,9 @@ async function buildTriggerFromArgs ({ resolveIdOptional, args }) {
   }
   if (args.nthOf !== undefined) {
     trigger.nthOf = args.nthOf
+  }
+  if (args.runOnce !== undefined) {
+    trigger.runOnce = args.runOnce
   }
   return trigger
 }
@@ -117,6 +120,7 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           time: z.string().optional().describe('create only, when not using basedOnId/basedOnName, time-based - "HH:MM", 24h. Defaults to 09:00.'),
           dayOf: z.union([z.string(), z.array(z.string())]).optional().describe('create only, when not using basedOnId/basedOnName, time-based - required for weekly/monthly/monthly-on-the-nth.'),
           nthOf: z.number().optional().describe('create only, when not using basedOnId/basedOnName, time-based monthly-on-the-nth - which occurrence (e.g. 2 for "the 2nd Tuesday").'),
+          runOnce: z.boolean().optional().describe('create only, when not using basedOnId/basedOnName - whether a contact who already ran this automation before can enter it again the next time the trigger matches (false), or only ever enters once, forever (true, the default). Has no effect on time-based triggers, which always run on schedule for every matching contact regardless of this setting.'),
           confirm: z.boolean().optional().describe(`delete only. ${CONFIRM_DESCRIPTION}`)
         }
       },
@@ -192,6 +196,7 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           time: z.string().optional().describe('set only, time-based - "HH:MM", 24h. Defaults to 09:00.'),
           dayOf: z.union([z.string(), z.array(z.string())]).optional().describe('set only, time-based - required for weekly/monthly/monthly-on-the-nth.'),
           nthOf: z.number().optional().describe('set only, time-based monthly-on-the-nth - which occurrence (e.g. 2 for "the 2nd Tuesday").'),
+          runOnce: z.boolean().optional().describe('set only - whether a contact who already ran this automation before can enter it again the next time the trigger matches (false), or only ever enters once, forever (true, the default). Has no effect on time-based triggers, which always run on schedule for every matching contact regardless of this setting.'),
           confirm: z.boolean().optional().describe(`set only. ${CONFIRM_DESCRIPTION}`)
         }
       },
@@ -276,7 +281,7 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           automationName: z.string().optional().describe('Looked up automatically. Provide this if you do not already have the id.'),
           nodeId: z.string().optional().describe('update/delete/restore only - the node (or branch sub-condition) to change, from a prior get/add.'),
           prevNodeId: z.string().optional().describe('add only - insert immediately after this existing node\'s id. Omit to insert as the very first step.'),
-          nodeType: z.enum(NODE_TYPES).optional().describe('required for add; only needed for update if changing a send-email/notify node (so its content-handling applies) or genuinely changing the node\'s type.'),
+          nodeType: z.enum(NODE_TYPES).optional().describe('required for add; only needed for update if changing a send-email/notify node (so its content-handling applies) or genuinely changing the node\'s type. "condition" is special and only valid for add: it does NOT add a top-level step - instead set prevNodeId to an EXISTING branch node\'s own id, and it appends one more arm/branch to that branch (branches start with two by default, e.g. "if X" / "else"). The new arm\'s own condition is set via property/operator/value/segmentId/link/excludeUnengaged below, same fields as a top-level filter-audience node. This is unrelated to the "condition" boolean field below, which is for updating/deleting an arm that already exists.'),
           duration: z.number().optional().describe('delay.'),
           durationType: z.enum(['immediately', 'minute', 'hour', 'day', 'wait-until-time', 'wait-until-day', 'wait-until-weekday']).optional().describe('delay.'),
           waitUntilTime: z.string().optional().describe('delay, "HH:MM" 24h - required for wait-until-time/wait-until-day.'),
@@ -319,6 +324,10 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           return textResult(`${staged ? 'Flagged the step for deletion (staged in the draft - not applied until merge_automation_draft)' : 'Deleted the step'}:\n\n${formatAutomationDetail(result)}`)
         }
 
+        if (args.action === 'add' && args.nodeType === 'condition' && !args.prevNodeId) {
+          return textResult('nodeType "condition" adds an arm to an EXISTING branch node, so prevNodeId is required - set it to that branch node\'s own id (from manage_automation "get").')
+        }
+
         const verb = args.action === 'add' ? 'adding a new step to this automation\'s sequence' : 'updating this step in the automation\'s sequence'
         const { result: preview } = await previewUnlessConfirmed({ client, resolveIdOrRequired, id: automationId, confirm: args.confirm, verb })
         if (preview) {
@@ -328,7 +337,11 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
         const segmentId = await resolveIdOptional({ id: args.segmentId, name: args.segmentName, resourcePath: '/segments', filterField: 'name', label: 'segment' })
         const subscriberListId = await resolveIdOptional({ id: args.subscriberListId, name: args.subscriberListName, resourcePath: '/subscriber-lists', filterField: 'name', label: 'subscriber list' })
 
-        const fields = args.condition
+        // A branch arm's own filter criteria live nested under .condition, both when updating an existing
+        // arm (the "condition" boolean flag) and when adding a new one (nodeType "condition" - see its
+        // description above) - everything else (a top-level node of any other type) is flat.
+        const nestUnderCondition = args.condition || args.nodeType === 'condition'
+        const fields = nestUnderCondition
           ? { condition: { property: args.property, operator: args.operator, value: args.value, link: args.link, segmentId, excludeUnengaged: args.excludeUnengaged } }
           : { duration: args.duration, durationType: args.durationType, waitUntilTime: args.waitUntilTime, waitUntilDay: args.waitUntilDay, property: args.property, operator: args.operator, value: args.value, link: args.link, segmentId, excludeUnengaged: args.excludeUnengaged, addValue: args.addValue, removeValue: args.removeValue, subscriberListId, emails: args.emails, url: args.url, method: args.method, headers: args.headers, includeContactData: args.includeContactData }
         const body = Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined))
@@ -364,6 +377,13 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           body: z.string().optional().describe('update only - HTML/text content. This tool cannot author the visual (Chamaileon) editor format.'),
           senderIdentityId: z.string().optional().describe('update only.'),
           replyTo: z.string().optional().describe('update only.'),
+          feeds: z.array(z.object({
+            url: z.string(),
+            feedType: z.enum(['rss-xml', 'json']).describe('"rss-xml" covers both RSS and Atom XML feeds.'),
+            variableName: z.string().describe('No spaces. The Handlebars variable this feed is looped over as in the body, e.g. {{#each <variableName>.item}}...{{/each}} for RSS, {{#each <variableName>.entry}}...{{/each}} for Atom, or a JSON-source-dependent key for "json" - inspect the feed to find it.'),
+            maxItems: z.number().optional().describe('Informational only - NOT enforced when sent. To actually limit items, pass limit/skip as hash args on the each tag itself, e.g. {{#each news.item limit=5 skip=0}}.'),
+            required: z.boolean().optional()
+          })).optional().describe('update only - replaces the full feeds list. RSS/Atom/JSON feeds pulled into this email\'s body at send time (see the "body" field for how to reference a feed\'s variableName from the template). Only usable when bodyType is "html"/"text" (or was previously set) - not for the visual Chamaileon editor.'),
           confirm: z.boolean().optional().describe(`update only. ${CONFIRM_DESCRIPTION}`)
         }
       },
@@ -373,7 +393,8 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
         if (args.action === 'get') {
           const email = await client.get(`/automations/${automationId}/email/${args.emailId}`)
           const type = email.type || 'chamaileon'
-          return textResult(`"${email.subject || '(no subject yet)'}" (id ${email._id})\nPreview text: ${email.previewText || '(none)'}\nType: ${type}${type === 'chamaileon' ? '' : `\nBody:\n${email.document}`}`)
+          const feeds = email.feeds?.length ? `\nFeeds: ${email.feeds.map(f => `${f.variableName} (${f.feedType}, ${f.url})`).join(', ')}` : ''
+          return textResult(`"${email.subject || '(no subject yet)'}" (id ${email._id})\nPreview text: ${email.previewText || '(none)'}\nType: ${type}${type === 'chamaileon' ? '' : `\nBody:\n${email.document}`}${feeds}`)
         }
 
         const { result: preview } = await previewUnlessConfirmed({ client, resolveIdOrRequired, id: automationId, confirm: args.confirm, verb: 'updating this step\'s email content (subject, body, etc.)' })
@@ -399,6 +420,9 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
         }
         if (args.replyTo !== undefined) {
           body.replyTo = args.replyTo
+        }
+        if (args.feeds !== undefined) {
+          body.feeds = args.feeds
         }
 
         const result = await client.patch(`/automations/${automationId}/email/${args.emailId}`, body)
