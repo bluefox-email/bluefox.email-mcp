@@ -8,6 +8,14 @@ const TRIGGER_TYPES = ['contact-added', 'contact-updated', 'enter-segment', 'lea
 
 const CONDITION_OPERATORS = ['any', 'equals', 'does-not-equal', 'contains', 'does-not-contain', 'is-empty', 'is-not-empty', 'is-opened', 'is-clicked', 'is-not-opened', 'is-not-clicked', 'is-true', 'is-false', 'greater-than', 'greater-than-or-equal', 'less-than', 'less-than-or-equal', 'has-tag', 'does-not-have-tag']
 
+const FEED_SCHEMA = z.array(z.object({
+  url: z.string(),
+  feedType: z.enum(['rss-xml', 'json']).describe('"rss-xml" covers both RSS and Atom XML feeds.'),
+  variableName: z.string().describe('No spaces. The Handlebars variable this feed is looped over as in the body, e.g. {{#each <variableName>.item}}...{{/each}} for RSS, {{#each <variableName>.entry}}...{{/each}} for Atom, or a JSON-source-dependent key for "json" - inspect the feed to find it.'),
+  maxItems: z.number().optional().describe('Informational only - NOT enforced when sent. To actually limit items, pass limit/skip as hash args on the each tag itself, e.g. {{#each news.item limit=5 skip=0}}.'),
+  required: z.boolean().optional()
+})).optional()
+
 const CONFIRM_DESCRIPTION = 'Set to true only after showing the user the automation\'s full current state (via manage_automation with action "get") and getting their explicit go-ahead - never infer confirmation from conversational tone. Omit or leave false to preview what this action would do without applying it.'
 
 async function resolveAutomationId ({ resolveIdOrRequired, id, name }) {
@@ -274,7 +282,7 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
       name: 'manage_automation_node',
       config: {
         title: 'Add, update, delete, or restore a step in an automation\'s sequence',
-        description: 'Steps run in order top to bottom. Use manage_automation (action "get") first to see the current sequence and every node\'s id - branch sub-conditions are addressable the same way, by their own id. send-email/notify content (subject, body, etc.) is set separately via manage_automation_email_content, not here. Deleting a step on an active/paused automation only stages it for removal (shown as "[PENDING DELETION]" in manage_automation\'s output) until the draft is merged - use "restore" to undo that before merging.',
+        description: 'Steps run in order top to bottom. Use manage_automation (action "get") first to see the current sequence and every node\'s id - branch sub-conditions are addressable the same way, by their own id. send-email/notify content (subject, body, etc.) is normally set separately via manage_automation_email_content, once the step has an emailId - EXCEPT for a send-email/notify step just added to an automation that is already active/paused: it has no emailId yet (one is only created when the draft is merged), so its initial content must be set here instead - action "update", nodeId + nodeType set to "send-email"/"notify", using the subject/previewText/bodyType/body/senderIdentityId/replyTo/feeds fields below (staged, then finalized into a real emailId by merge_automation_draft). Deleting a step on an active/paused automation only stages it for removal (shown as "[PENDING DELETION]" in manage_automation\'s output) until the draft is merged - use "restore" to undo that before merging.',
         inputSchema: {
           action: z.enum(['add', 'update', 'delete', 'restore']),
           automationId: z.string().optional(),
@@ -303,6 +311,13 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           method: z.enum(['POST', 'GET', 'PUT', 'PATCH']).optional().describe('webhook.'),
           headers: z.record(z.string()).optional().describe('webhook.'),
           includeContactData: z.boolean().optional().describe('webhook.'),
+          subject: z.string().optional().describe('update only, send-email/notify - see this tool\'s description for when this applies instead of manage_automation_email_content.'),
+          previewText: z.string().optional().describe('update only, send-email/notify - inbox preview text.'),
+          bodyType: z.enum(['html', 'text']).optional().describe('update only, send-email/notify. Omit to keep using the visual (Chamaileon) editor.'),
+          body: z.string().optional().describe('update only, send-email/notify - HTML/text content, only when bodyType is set. This tool cannot author the visual (Chamaileon) editor format.'),
+          senderIdentityId: z.string().optional().describe('update only, send-email/notify.'),
+          replyTo: z.string().optional().describe('update only, send-email/notify.'),
+          feeds: FEED_SCHEMA.describe('update only, send-email/notify - RSS/Atom/JSON feeds pulled into the body at send time. Only usable with bodyType "html"/"text".'),
           confirm: z.boolean().optional().describe(`add/update/delete only. ${CONFIRM_DESCRIPTION}`)
         }
       },
@@ -349,6 +364,34 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           body.type = args.nodeType
         }
 
+        // Only meaningful on update, targeting a send-email/notify node that has no emailId yet (see this
+        // tool's description) - the API expects these under these exact raw names, distinct from how
+        // manage_automation_email_content names them (document not body, senderIdentity not senderIdentityId,
+        // emailType not bodyType - "type" is already the node's own type here).
+        if (args.action === 'update') {
+          if (args.subject !== undefined) {
+            body.subject = args.subject
+          }
+          if (args.previewText !== undefined) {
+            body.previewText = args.previewText
+          }
+          if (args.bodyType) {
+            body.emailType = args.bodyType
+          }
+          if (args.body !== undefined) {
+            body.document = args.body
+          }
+          if (args.senderIdentityId) {
+            body.senderIdentity = args.senderIdentityId
+          }
+          if (args.replyTo !== undefined) {
+            body.replyTo = args.replyTo
+          }
+          if (args.feeds !== undefined) {
+            body.feeds = args.feeds
+          }
+        }
+
         if (args.action === 'add') {
           if (args.prevNodeId) {
             body.prevNodeId = args.prevNodeId
@@ -377,13 +420,7 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           body: z.string().optional().describe('update only - HTML/text content. This tool cannot author the visual (Chamaileon) editor format.'),
           senderIdentityId: z.string().optional().describe('update only.'),
           replyTo: z.string().optional().describe('update only.'),
-          feeds: z.array(z.object({
-            url: z.string(),
-            feedType: z.enum(['rss-xml', 'json']).describe('"rss-xml" covers both RSS and Atom XML feeds.'),
-            variableName: z.string().describe('No spaces. The Handlebars variable this feed is looped over as in the body, e.g. {{#each <variableName>.item}}...{{/each}} for RSS, {{#each <variableName>.entry}}...{{/each}} for Atom, or a JSON-source-dependent key for "json" - inspect the feed to find it.'),
-            maxItems: z.number().optional().describe('Informational only - NOT enforced when sent. To actually limit items, pass limit/skip as hash args on the each tag itself, e.g. {{#each news.item limit=5 skip=0}}.'),
-            required: z.boolean().optional()
-          })).optional().describe('update only - replaces the full feeds list. RSS/Atom/JSON feeds pulled into this email\'s body at send time (see the "body" field for how to reference a feed\'s variableName from the template). Only usable when bodyType is "html"/"text" (or was previously set) - not for the visual Chamaileon editor.'),
+          feeds: FEED_SCHEMA.describe('update only - replaces the full feeds list. RSS/Atom/JSON feeds pulled into this email\'s body at send time (see the "body" field for how to reference a feed\'s variableName from the template). Only usable when bodyType is "html"/"text" (or was previously set) - not for the visual Chamaileon editor.'),
           confirm: z.boolean().optional().describe(`update only. ${CONFIRM_DESCRIPTION}`)
         }
       },

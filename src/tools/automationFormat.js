@@ -73,9 +73,9 @@ function formatNodeSummary (node) {
       return `Wait ${node.duration} ${node.durationType}(s)`
     }
     case 'send-email':
-      return `Send email (emailId ${node.emailId || 'not set yet - use manage_automation_email_content'})`
+      return `Send email (emailId ${node.emailId || (node.draftData ? 'not assigned yet - content staged via manage_automation_node, call merge_automation_draft to finalize it' : 'not set yet - use manage_automation_email_content, or manage_automation_node update if this automation is active/paused')})`
     case 'notify':
-      return `Notify (emailId ${node.emailId || 'not set yet'}, list ${node.subscriberListId || 'n/a'}${node.emails?.length ? `, extra recipients: ${node.emails.join(', ')}` : ''})`
+      return `Notify (emailId ${node.emailId || (node.draftData ? 'not assigned yet - content staged via manage_automation_node, call merge_automation_draft to finalize it' : 'not set yet')}, list ${node.subscriberListId || 'n/a'}${node.emails?.length ? `, extra recipients: ${node.emails.join(', ')}` : ''})`
     case 'filter-audience':
       return `Filter audience: ${formatConditionText(node)} - non-matching contacts exit here`
     case 'set-value':

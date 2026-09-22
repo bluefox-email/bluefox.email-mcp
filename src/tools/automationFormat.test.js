@@ -193,6 +193,23 @@ describe('formatAutomationDetail', () => {
   })
 })
 
+describe('formatAutomationDetail - staged send-email content on an active automation', () => {
+  test('shows draftData is staged rather than claiming content is unset', () => {
+    const automation = {
+      _id: 'auto1',
+      name: 'Live flow',
+      status: 'active',
+      trigger: { type: 'contact-added', subscriberListId: 'list1' },
+      exitCriteria: { active: false },
+      sequence: [{ _id: 'n1', type: 'complete' }],
+      draftSequence: [{ _id: 'n1', type: 'send-email', emailId: null, draftData: { subject: 'Welcome!' } }]
+    }
+
+    const text = formatAutomationDetail(automation)
+    expect(text).toContain('not assigned yet - content staged via manage_automation_node, call merge_automation_draft to finalize it')
+  })
+})
+
 describe('formatAutomationSummaryLine', () => {
   test('formats a name/id/status one-liner', () => {
     expect(formatAutomationSummaryLine({ name: 'Welcome flow', _id: 'auto1', status: 'active' })).toBe('"Welcome flow" (id auto1) - active')

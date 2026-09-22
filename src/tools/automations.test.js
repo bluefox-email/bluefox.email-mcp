@@ -406,6 +406,44 @@ describe('manage_automation_node', () => {
     expect(client.put).toHaveBeenCalledWith('/automations/auto1/node/n1', { duration: 5, durationType: 'day' })
   })
 
+  test('update stages a send-email node\'s content on an active automation, using the API\'s raw field names', async () => {
+    const { client, byName } = setup()
+    client.put.mockResolvedValue(baseAutomation)
+
+    await byName.manage_automation_node.handler({
+      action: 'update',
+      automationId: 'auto1',
+      nodeId: 'n1',
+      nodeType: 'send-email',
+      subject: 'Welcome!',
+      previewText: 'Glad to have you',
+      bodyType: 'html',
+      body: '<p>hi</p>',
+      senderIdentityId: 'sender1',
+      replyTo: 'reply@example.com',
+      confirm: true
+    })
+
+    expect(client.put).toHaveBeenCalledWith('/automations/auto1/node/n1', {
+      type: 'send-email',
+      subject: 'Welcome!',
+      previewText: 'Glad to have you',
+      emailType: 'html',
+      document: '<p>hi</p>',
+      senderIdentity: 'sender1',
+      replyTo: 'reply@example.com'
+    })
+  })
+
+  test('add does not forward email content fields (the API ignores them there anyway)', async () => {
+    const { client, byName } = setup()
+    client.post.mockResolvedValue(baseAutomation)
+
+    await byName.manage_automation_node.handler({ action: 'add', automationId: 'auto1', nodeType: 'send-email', subject: 'Should be ignored', confirm: true })
+
+    expect(client.post).toHaveBeenCalledWith('/automations/auto1/node', { type: 'send-email' })
+  })
+
   test('update a branch\'s own sub-condition when condition: true', async () => {
     const { client, byName } = setup()
     client.put.mockResolvedValue(baseAutomation)
