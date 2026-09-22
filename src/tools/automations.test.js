@@ -428,6 +428,7 @@ describe('manage_automation_node', () => {
     const { client, byName } = setup()
     client.put.mockResolvedValue(baseAutomation)
 
+    const feeds = [{ url: 'https://example.com/rss', feedType: 'rss-xml', variableName: 'news' }]
     await byName.manage_automation_node.handler({
       action: 'update',
       automationId: 'auto1',
@@ -439,6 +440,7 @@ describe('manage_automation_node', () => {
       body: '<p>hi</p>',
       senderIdentityId: 'sender1',
       replyTo: 'reply@example.com',
+      feeds,
       confirm: true
     })
 
@@ -449,7 +451,8 @@ describe('manage_automation_node', () => {
       emailType: 'html',
       document: '<p>hi</p>',
       senderIdentity: 'sender1',
-      replyTo: 'reply@example.com'
+      replyTo: 'reply@example.com',
+      feeds
     })
   })
 
@@ -604,6 +607,67 @@ describe('manage_automation_email_content', () => {
   })
 })
 
+describe('manage_automation_running_contacts', () => {
+  test('counts reports nothing running when there are no entries', async () => {
+    const { client, byName } = setup()
+    client.get.mockResolvedValue({})
+
+    const result = await byName.manage_automation_running_contacts.handler({ action: 'counts', automationId: 'auto1' })
+
+    expect(client.get).toHaveBeenCalledWith('/automations/auto1/running-nodes')
+    expect(result.content[0].text).toBe('No contacts are currently running or paused in this automation.')
+  })
+
+  test('counts lists each step with its contact count', async () => {
+    const { client, byName } = setup()
+    client.get.mockResolvedValue({ n1: 3, n2: 1 })
+
+    const result = await byName.manage_automation_running_contacts.handler({ action: 'counts', automationId: 'auto1' })
+
+    expect(result.content[0].text).toContain('n1: 3 contact(s)')
+    expect(result.content[0].text).toContain('n2: 1 contact(s)')
+  })
+
+  test('list requires nodeId', async () => {
+    const { client, byName } = setup()
+
+    const result = await byName.manage_automation_running_contacts.handler({ action: 'list', automationId: 'auto1' })
+
+    expect(client.get).not.toHaveBeenCalledWith(expect.stringContaining('/running-nodes/'), expect.anything())
+    expect(result.content[0].text).toContain('nodeId is required')
+  })
+
+  test('list reports when nothing is at that step', async () => {
+    const { client, byName } = setup()
+    client.get.mockResolvedValue({ count: 0, items: [] })
+
+    const result = await byName.manage_automation_running_contacts.handler({ action: 'list', automationId: 'auto1', nodeId: 'n1' })
+
+    expect(client.get).toHaveBeenCalledWith('/automations/auto1/running-nodes/n1', { limit: undefined, skip: undefined })
+    expect(result.content[0].text).toBe('No contacts are currently at this step.')
+  })
+
+  test('list shows each contact with status, and notes when more exist', async () => {
+    const { client, byName } = setup()
+    client.get.mockResolvedValue({ count: 2, items: [{ contactId: { email: 'a@example.com' }, status: 'running' }] })
+
+    const result = await byName.manage_automation_running_contacts.handler({ action: 'list', automationId: 'auto1', nodeId: 'trigger', limit: 1 })
+
+    expect(client.get).toHaveBeenCalledWith('/automations/auto1/running-nodes/trigger', { limit: 1, skip: undefined })
+    expect(result.content[0].text).toContain('a@example.com (running)')
+    expect(result.content[0].text).toContain('more not shown')
+  })
+
+  test('list falls back to the raw contactId when not populated', async () => {
+    const { client, byName } = setup()
+    client.get.mockResolvedValue({ count: 1, items: [{ contactId: 'contact1', status: 'paused' }] })
+
+    const result = await byName.manage_automation_running_contacts.handler({ action: 'list', automationId: 'auto1', nodeId: 'n1' })
+
+    expect(result.content[0].text).toContain('contact1 (paused)')
+  })
+})
+
 describe('lifecycle tools', () => {
   const cases = [
     ['activate_automation', '/activate', 'Activated automation'],
@@ -634,5 +698,14 @@ describe('lifecycle tools', () => {
 
     const result = await byName.activate_automation.handler({ automationId: 'auto1', confirm: true })
     expect(result.content[0].text).toContain('Validation failed - nothing was changed')
+  })
+
+  test('merge_automation_draft warns when some running contacts failed to update', async () => {
+    const { client, byName } = setup()
+    client.get.mockResolvedValue(baseAutomation)
+    client.post.mockResolvedValue({ ...baseAutomation, status: 'active', runningAutomationUpdateFailures: 2 })
+
+    const result = await byName.merge_automation_draft.handler({ automationId: 'auto1', confirm: true })
+    expect(result.content[0].text).toContain('Warning: 2 contact(s) already in this automation failed to update')
   })
 })

@@ -473,6 +473,43 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
         return textResult(`Updated email content:\n"${result.subject}" (id ${result._id})`)
       }
     },
+    {
+      name: 'manage_automation_running_contacts',
+      config: {
+        title: 'See who is currently running through an automation',
+        description: 'Read-only. "counts" shows how many contacts are currently sitting at each step (status running or paused - completed/errored runs are never counted). "list" drills down to the actual contacts at one specific step.',
+        inputSchema: {
+          action: z.enum(['counts', 'list']),
+          automationId: z.string().optional(),
+          automationName: z.string().optional().describe('Looked up automatically. Provide this if you do not already have the id.'),
+          nodeId: z.string().optional().describe('list only, required - a step\'s own id (from manage_automation "get"), or the literal "trigger" for contacts already enrolled but not yet at any step.'),
+          limit: z.number().optional().describe('list only - max contacts to return, capped at 30. Defaults to 10.'),
+          skip: z.number().optional().describe('list only - for pagination, once you know there are more than fit in one page.')
+        }
+      },
+      handler: async (args) => {
+        const automationId = await resolveAutomationId({ resolveIdOrRequired, id: args.automationId, name: args.automationName })
+
+        if (args.action === 'counts') {
+          const counts = await client.get(`/automations/${automationId}/running-nodes`)
+          const entries = Object.entries(counts)
+          if (entries.length === 0) {
+            return textResult('No contacts are currently running or paused in this automation.')
+          }
+          return textResult(`Currently running/paused, by step (use manage_automation "get" to match a step id to its position):\n${entries.map(([nodeId, count]) => `${nodeId}: ${count} contact(s)`).join('\n')}`)
+        }
+
+        if (!args.nodeId) {
+          return textResult('nodeId is required for "list" - a step\'s own id from manage_automation "get", or "trigger" for contacts not yet at any step.')
+        }
+        const result = await client.get(`/automations/${automationId}/running-nodes/${args.nodeId}`, { limit: args.limit, skip: args.skip })
+        if (result.count === 0) {
+          return textResult('No contacts are currently at this step.')
+        }
+        const lines = result.items.map(item => `${item.contactId?.email || item.contactId?._id || item.contactId} (${item.status})`).join('\n')
+        return textResult(`${result.count} contact(s) at this step:\n${lines}${result.count > result.items.length ? '\n(more not shown - pass skip to page through the rest)' : ''}`)
+      }
+    },
     lifecycleTool({ client, resolveIdOrRequired }, {
       name: 'activate_automation',
       title: 'Activate',
