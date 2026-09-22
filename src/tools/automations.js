@@ -12,6 +12,36 @@ async function resolveAutomationId ({ resolveIdOrRequired, id, name }) {
   return resolveIdOrRequired({ id, name, resourcePath: '/automations', filterField: 'name', label: 'automation' })
 }
 
+// Shared by manage_automation's create action and manage_automation_trigger's set action, so the
+// two ways to end up with a trigger body build it identically.
+async function buildTriggerFromArgs ({ resolveIdOptional, args }) {
+  const subscriberListId = await resolveIdOptional({ id: args.subscriberListId, name: args.subscriberListName, resourcePath: '/subscriber-lists', filterField: 'name', label: 'subscriber list' })
+  const segmentId = await resolveIdOptional({ id: args.segmentId, name: args.segmentName, resourcePath: '/segments', filterField: 'name', label: 'segment' })
+  const trigger = { type: args.type, subscriberListId, segmentId }
+  if (args.property) {
+    trigger.property = args.property
+  }
+  if (args.fromOperator || args.fromValue !== undefined) {
+    trigger.from = { operator: args.fromOperator, value: args.fromValue }
+  }
+  if (args.toOperator || args.toValue !== undefined) {
+    trigger.to = { operator: args.toOperator, value: args.toValue }
+  }
+  if (args.schedule) {
+    trigger.schedule = args.schedule
+  }
+  if (args.time) {
+    trigger.time = args.time
+  }
+  if (args.dayOf !== undefined) {
+    trigger.dayOf = args.dayOf
+  }
+  if (args.nthOf !== undefined) {
+    trigger.nthOf = args.nthOf
+  }
+  return trigger
+}
+
 // Shared by every lifecycle tool below (activate/merge/discard/pause/resume) and by manage_automation's delete
 // action: fetches the automation and, unless confirm:true was passed, returns a side-effect-free preview built
 // from the exact same formatter a "get" call would show - so a model that calls this without confirm still can't
@@ -63,16 +93,28 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
       name: 'manage_automation',
       config: {
         title: 'Manage automations',
-        description: 'Automations are bluefox.email\'s visual workflow builder: a trigger plus a sequence of steps (delay, send email, filter/branch on audience, set a value, manage tags, call a webhook). Draft automations can be edited freely and every edit here applies immediately, mirroring the dashboard UI exactly. Once an automation is active, structural edits (trigger, exit criteria, and every node change from manage_automation_node/manage_automation_email_content) are automatically staged as an unmerged draft instead of touching what is actually running - use activate_automation/merge_automation_draft/discard_automation_draft/pause_automation/resume_automation to move between states, each of which requires explicit confirmation.',
+        description: 'Automations are bluefox.email\'s visual workflow builder: a trigger plus a sequence of steps (delay, send email, filter/branch on audience, set a value, manage tags, call a webhook). Draft automations can be edited freely and every edit here applies immediately, mirroring the dashboard UI exactly. Once an automation is active, structural edits (trigger, exit criteria, and every node change from manage_automation_node/manage_automation_email_content) are automatically staged as an unmerged draft instead of touching what is actually running - use activate_automation/merge_automation_draft/discard_automation_draft/pause_automation/resume_automation to move between states, each of which requires explicit confirmation. Creating an automation always requires a trigger up front, either duplicated via basedOnId/basedOnName or specified with the trigger fields below (same shape as manage_automation_trigger) - there is no way to create one trigger-less and set the trigger afterward.',
         inputSchema: {
           action: z.enum(['list', 'get', 'create', 'update_name', 'delete']),
           automationId: z.string().optional(),
           automationName: z.string().optional().describe('The automation to get/update/delete, by name - looked up automatically. Provide this if you do not already have the id.'),
           name: z.string().optional().describe('create (required), or update_name to rename.'),
-          basedOnId: z.string().optional().describe('create only - duplicate an existing automation (its trigger and full sequence) as the starting point. The new automation always starts in "draft" status regardless of the source\'s status.'),
+          basedOnId: z.string().optional().describe('create only - duplicate an existing automation (its trigger and full sequence) as the starting point instead of specifying trigger fields below. The new automation always starts in "draft" status regardless of the source\'s status.'),
           basedOnName: z.string().optional().describe('create only - same as basedOnId, by the source automation\'s name.'),
-          subscriberListId: z.string().optional().describe('create with basedOnId/basedOnName only - overrides the duplicated trigger\'s subscriber list, to clone the automation onto a different list.'),
+          type: z.enum(TRIGGER_TYPES).optional().describe('create only, when not using basedOnId/basedOnName - required. The trigger type.'),
+          subscriberListId: z.string().optional().describe('create only. Without basedOnId/basedOnName: required, the trigger\'s subscriber list. With basedOnId/basedOnName: optional, overrides the duplicated trigger\'s subscriber list to clone the automation onto a different list.'),
           subscriberListName: z.string().optional().describe('Same as subscriberListId, by list name.'),
+          segmentId: z.string().optional().describe('create only, when not using basedOnId/basedOnName - required for enter-segment/leave-segment.'),
+          segmentName: z.string().optional().describe('Same as segmentId, by segment name.'),
+          property: z.string().optional().describe('create only, when not using basedOnId/basedOnName, contact-updated - the contact field to watch.'),
+          fromOperator: z.string().optional().describe('create only, when not using basedOnId/basedOnName, contact-updated - e.g. "equals", "any". See manage_segment for the full operator list.'),
+          fromValue: z.string().optional(),
+          toOperator: z.string().optional(),
+          toValue: z.string().optional(),
+          schedule: z.enum(['daily', 'weekday', 'weekly', 'monthly', 'monthly-on-the-nth']).optional().describe('create only, when not using basedOnId/basedOnName, time-based.'),
+          time: z.string().optional().describe('create only, when not using basedOnId/basedOnName, time-based - "HH:MM", 24h. Defaults to 09:00.'),
+          dayOf: z.union([z.string(), z.array(z.string())]).optional().describe('create only, when not using basedOnId/basedOnName, time-based - required for weekly/monthly/monthly-on-the-nth.'),
+          nthOf: z.number().optional().describe('create only, when not using basedOnId/basedOnName, time-based monthly-on-the-nth - which occurrence (e.g. 2 for "the 2nd Tuesday").'),
           confirm: z.boolean().optional().describe(`delete only. ${CONFIRM_DESCRIPTION}`)
         }
       },
@@ -95,6 +137,11 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
             if (subscriberListId) {
               body.subscriberListId = subscriberListId
             }
+          } else {
+            if (!args.type) {
+              return textResult('A trigger is required to create an automation. Either provide basedOnId/basedOnName to duplicate one, or provide "type" (contact-added, contact-updated, enter-segment, leave-segment, time-based) plus the fields it needs - see manage_automation\'s schema for the full list.')
+            }
+            body.trigger = await buildTriggerFromArgs({ resolveIdOptional, args })
           }
           const result = await client.post('/automations', body)
           return textResult(`Created automation:\n\n${formatAutomationDetail(result)}`)
@@ -159,30 +206,7 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           return preview
         }
 
-        const subscriberListId = await resolveIdOptional({ id: args.subscriberListId, name: args.subscriberListName, resourcePath: '/subscriber-lists', filterField: 'name', label: 'subscriber list' })
-        const segmentId = await resolveIdOptional({ id: args.segmentId, name: args.segmentName, resourcePath: '/segments', filterField: 'name', label: 'segment' })
-        const trigger = { type: args.type, subscriberListId, segmentId }
-        if (args.property) {
-          trigger.property = args.property
-        }
-        if (args.fromOperator || args.fromValue !== undefined) {
-          trigger.from = { operator: args.fromOperator, value: args.fromValue }
-        }
-        if (args.toOperator || args.toValue !== undefined) {
-          trigger.to = { operator: args.toOperator, value: args.toValue }
-        }
-        if (args.schedule) {
-          trigger.schedule = args.schedule
-        }
-        if (args.time) {
-          trigger.time = args.time
-        }
-        if (args.dayOf !== undefined) {
-          trigger.dayOf = args.dayOf
-        }
-        if (args.nthOf !== undefined) {
-          trigger.nthOf = args.nthOf
-        }
+        const trigger = await buildTriggerFromArgs({ resolveIdOptional, args })
 
         const result = await client.patch(`/automations/${automationId}/trigger`, trigger)
         const staged = result.draftTrigger ? ' (staged as a draft change - not live until merged)' : ''

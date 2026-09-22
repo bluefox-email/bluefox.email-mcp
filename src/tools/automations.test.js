@@ -48,13 +48,22 @@ describe('manage_automation', () => {
     expect(result.content[0].text).not.toContain('more not shown')
   })
 
-  test('create without basedOn just posts the name', async () => {
+  test('create without basedOn and without a trigger type reports the requirement instead of posting', async () => {
     const { client, byName } = setup()
-    client.post.mockResolvedValue(baseAutomation)
 
     const result = await byName.manage_automation.handler({ action: 'create', name: 'Welcome flow' })
 
-    expect(client.post).toHaveBeenCalledWith('/automations', { name: 'Welcome flow' })
+    expect(client.post).not.toHaveBeenCalled()
+    expect(result.content[0].text).toContain('A trigger is required to create an automation')
+  })
+
+  test('create without basedOn posts the built trigger', async () => {
+    const { client, byName } = setup()
+    client.post.mockResolvedValue(baseAutomation)
+
+    const result = await byName.manage_automation.handler({ action: 'create', name: 'Welcome flow', type: 'contact-added', subscriberListId: 'list1' })
+
+    expect(client.post).toHaveBeenCalledWith('/automations', { name: 'Welcome flow', trigger: { type: 'contact-added', subscriberListId: 'list1', segmentId: undefined } })
     expect(result.content[0].text).toContain('Created automation:')
   })
 
