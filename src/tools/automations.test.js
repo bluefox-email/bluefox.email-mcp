@@ -331,6 +331,24 @@ describe('manage_automation_node', () => {
     expect(result.content[0].text).toContain('prevNodeId is required')
   })
 
+  test('add nodeType "branch" with inline condition fields is rejected instead of silently dropping them', async () => {
+    const { client, byName } = setup()
+
+    const result = await byName.manage_automation_node.handler({ action: 'add', automationId: 'auto1', nodeType: 'branch', operator: 'equals', property: 'plan', value: 'pro', confirm: true })
+
+    expect(client.post).not.toHaveBeenCalled()
+    expect(result.content[0].text).toContain('have no effect when adding a branch')
+  })
+
+  test('add nodeType "branch" without any condition fields is unaffected by the guard', async () => {
+    const { client, byName } = setup()
+    client.post.mockResolvedValue(baseAutomation)
+
+    await byName.manage_automation_node.handler({ action: 'add', automationId: 'auto1', nodeType: 'branch', confirm: true })
+
+    expect(client.post).toHaveBeenCalledWith('/automations/auto1/node', { type: 'branch' })
+  })
+
   test('add nodeType "condition" with prevNodeId nests the criteria under condition, to append a new branch arm', async () => {
     const { client, byName } = setup()
     client.post.mockResolvedValue(baseAutomation)
