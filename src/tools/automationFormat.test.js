@@ -61,6 +61,14 @@ describe('formatExitCriteria', () => {
   test('active with none of the specific fields falls back to "any"', () => {
     expect(formatExitCriteria({ active: true })).toBe('Exits early when any.')
   })
+
+  test('active with is-opened shows the target emailId, not a plain property/operator/value', () => {
+    expect(formatExitCriteria({ active: true, operator: 'is-opened', value: 'email1' })).toBe('Exits early when opened email (emailId email1).')
+  })
+
+  test('active with is-clicked and a link shows both', () => {
+    expect(formatExitCriteria({ active: true, operator: 'is-clicked', value: 'email1', link: 'https://example.com' })).toBe('Exits early when clicked email (emailId email1), link "https://example.com".')
+  })
 })
 
 describe('formatAutomationDetail', () => {
@@ -100,6 +108,8 @@ describe('formatAutomationDetail', () => {
         { _id: 'n8b', type: 'filter-audience', excludeUnengaged: true },
         { _id: 'n8c', type: 'filter-audience', operator: 'is-true' },
         { _id: 'n8d', type: 'filter-audience', property: 'plan' },
+        { _id: 'n8e', type: 'filter-audience', operator: 'is-opened', value: 'email1' },
+        { _id: 'n8f', type: 'filter-audience', operator: 'is-clicked', value: 'email1', link: 'https://example.com' },
         { _id: 'n9', type: 'set-value', property: 'stage', value: 'won' },
         { _id: 'n10', type: 'manage-tags', addValue: ['vip'], removeValue: ['trial'] },
         { _id: 'n10b', type: 'manage-tags' },
@@ -137,6 +147,8 @@ describe('formatAutomationDetail', () => {
     expect(text).toContain('Filter audience: unengaged')
     expect(text).toContain('Filter audience: is-true')
     expect(text).toContain('Filter audience: plan any')
+    expect(text).toContain('Filter audience: opened email (emailId email1)')
+    expect(text).toContain('Filter audience: clicked email (emailId email1), link "https://example.com"')
     expect(text).toContain('Set stage = "won"')
     expect(text).toContain('Manage tags: +[vip] -[trial]')
     expect(text).toContain('Manage tags: +[] -[]')

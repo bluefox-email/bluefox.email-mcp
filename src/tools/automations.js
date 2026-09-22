@@ -6,6 +6,8 @@ const NODE_TYPES = ['delay', 'send-email', 'filter-audience', 'branch', 'complet
 
 const TRIGGER_TYPES = ['contact-added', 'contact-updated', 'enter-segment', 'leave-segment', 'time-based']
 
+const CONDITION_OPERATORS = ['any', 'equals', 'does-not-equal', 'contains', 'does-not-contain', 'is-empty', 'is-not-empty', 'is-opened', 'is-clicked', 'is-not-opened', 'is-not-clicked', 'is-true', 'is-false', 'greater-than', 'greater-than-or-equal', 'less-than', 'less-than-or-equal', 'has-tag', 'does-not-have-tag']
+
 const CONFIRM_DESCRIPTION = 'Set to true only after showing the user the automation\'s full current state (via manage_automation with action "get") and getting their explicit go-ahead - never infer confirmation from conversational tone. Omit or leave false to preview what this action would do without applying it.'
 
 async function resolveAutomationId ({ resolveIdOrRequired, id, name }) {
@@ -222,10 +224,11 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           action: z.enum(['get', 'set', 'clear']),
           automationId: z.string().optional(),
           automationName: z.string().optional().describe('Looked up automatically. Provide this if you do not already have the id.'),
-          property: z.string().optional().describe('set only.'),
-          operator: z.string().optional().describe('set only.'),
-          value: z.any().optional().describe('set only.'),
-          segmentId: z.string().optional().describe('set only.'),
+          property: z.string().optional().describe('set only - the contact field to compare, used with operator/value. Not used for the is-opened/is-clicked/is-not-opened/is-not-clicked operators, or when segmentId/excludeUnengaged/leaveSegment is set.'),
+          operator: z.enum(CONDITION_OPERATORS).optional().describe('set only. Most operators (equals, contains, greater-than, has-tag, etc.) compare the contact\'s "property" field against "value". is-opened/is-clicked/is-not-opened/is-not-clicked are different and do NOT use property: they check whether the contact opened/clicked one specific email sent earlier in this automation run - set "value" to that email\'s emailId (from a send-email/notify node\'s emailId field - see manage_automation "get"). is-clicked/is-not-clicked can be narrowed further to one link via "link". Ignored if segmentId/excludeUnengaged/leaveSegment is set instead.'),
+          value: z.any().optional().describe('set only. For is-opened/is-clicked/is-not-opened/is-not-clicked: the target email\'s emailId. For has-tag/does-not-have-tag: the tag name. Otherwise: the value to compare against "property".'),
+          link: z.string().optional().describe('set only, is-clicked/is-not-clicked only - narrows the check to one specific link URL within the target email (from "value") instead of any link in it.'),
+          segmentId: z.string().optional().describe('set only - exits on segment membership instead of operator/property/value/link (ignored when this is set). For a general engagement window (e.g. "opened anything in the last 7 days"), not for "opened this specific email" - use operator is-opened with value set to the email\'s id for that.'),
           segmentName: z.string().optional().describe('Same as segmentId, by segment name.'),
           excludeUnengaged: z.boolean().optional().describe('set only.'),
           leaveSegment: z.boolean().optional().describe('set only - also removes the contact from the matched segment when they exit.'),
@@ -255,7 +258,7 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
         }
 
         const segmentId = await resolveIdOptional({ id: args.segmentId, name: args.segmentName, resourcePath: '/segments', filterField: 'name', label: 'segment' })
-        const exitCriteria = { active: true, property: args.property, operator: args.operator, value: args.value, segmentId, excludeUnengaged: args.excludeUnengaged, leaveSegment: args.leaveSegment }
+        const exitCriteria = { active: true, property: args.property, operator: args.operator, value: args.value, link: args.link, segmentId, excludeUnengaged: args.excludeUnengaged, leaveSegment: args.leaveSegment }
 
         const result = await client.patch(`/automations/${automationId}/exit-criteria`, exitCriteria)
         const staged = result.draftExitCriteria ? ' (staged as a draft change - not live until merged)' : ''
@@ -278,10 +281,11 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           durationType: z.enum(['immediately', 'minute', 'hour', 'day', 'wait-until-time', 'wait-until-day', 'wait-until-weekday']).optional().describe('delay.'),
           waitUntilTime: z.string().optional().describe('delay, "HH:MM" 24h - required for wait-until-time/wait-until-day.'),
           waitUntilDay: z.enum(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']).optional().describe('delay wait-until-day.'),
-          property: z.string().optional().describe('filter-audience / set-value / branch condition.'),
-          operator: z.string().optional().describe('filter-audience / branch condition.'),
-          value: z.any().optional().describe('filter-audience / set-value / branch condition.'),
-          segmentId: z.string().optional().describe('filter-audience / branch condition.'),
+          property: z.string().optional().describe('filter-audience / set-value / branch condition - the contact field to compare, used with operator/value. Not used (and ignored) for the is-opened/is-clicked/is-not-opened/is-not-clicked operators, or when segmentId is set.'),
+          operator: z.enum(CONDITION_OPERATORS).optional().describe('filter-audience / branch condition. Most operators (equals, contains, greater-than, has-tag, etc.) compare the contact\'s "property" field against "value". is-opened/is-clicked/is-not-opened/is-not-clicked are different and do NOT use property: they check whether the contact opened/clicked one specific email sent earlier in THIS SAME automation run - set "value" to that email\'s emailId (from an earlier send-email/notify node\'s emailId field - see manage_automation "get"), not a segment or a contact field. is-clicked/is-not-clicked can be narrowed further to one link via "link". This whole operator/property/value/link group is ignored if segmentId is set instead (segment membership is checked there, which is timeframe-based engagement like "opened in the last N days", not tied to one specific email).'),
+          value: z.any().optional().describe('filter-audience / set-value / branch condition. For is-opened/is-clicked/is-not-opened/is-not-clicked: the target email\'s emailId (from an earlier send-email/notify node in this automation), not a plain comparison value. For has-tag/does-not-have-tag: the tag name. Otherwise: the value to compare against "property".'),
+          link: z.string().optional().describe('filter-audience / branch condition, is-clicked/is-not-clicked only - narrows the check to one specific link URL within the target email (from "value") instead of any link in it.'),
+          segmentId: z.string().optional().describe('filter-audience / branch condition - filters/branches on segment membership instead of operator/property/value/link, which are ignored when this is set. Use this for general engagement windows (e.g. "opened anything in the last 7 days") or audience segments, not for "opened this specific email" - use operator is-opened with value set to the email\'s id for that.'),
           segmentName: z.string().optional().describe('Same as segmentId, by segment name.'),
           excludeUnengaged: z.boolean().optional().describe('filter-audience / notify / branch condition.'),
           condition: z.boolean().optional().describe('Set true when updating a branch\'s own sub-condition (targeted by nodeId) rather than a top-level node - uses property/operator/value/segmentId/excludeUnengaged above.'),
@@ -325,8 +329,8 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
         const subscriberListId = await resolveIdOptional({ id: args.subscriberListId, name: args.subscriberListName, resourcePath: '/subscriber-lists', filterField: 'name', label: 'subscriber list' })
 
         const fields = args.condition
-          ? { condition: { property: args.property, operator: args.operator, value: args.value, segmentId, excludeUnengaged: args.excludeUnengaged } }
-          : { duration: args.duration, durationType: args.durationType, waitUntilTime: args.waitUntilTime, waitUntilDay: args.waitUntilDay, property: args.property, operator: args.operator, value: args.value, segmentId, excludeUnengaged: args.excludeUnengaged, addValue: args.addValue, removeValue: args.removeValue, subscriberListId, emails: args.emails, url: args.url, method: args.method, headers: args.headers, includeContactData: args.includeContactData }
+          ? { condition: { property: args.property, operator: args.operator, value: args.value, link: args.link, segmentId, excludeUnengaged: args.excludeUnengaged } }
+          : { duration: args.duration, durationType: args.durationType, waitUntilTime: args.waitUntilTime, waitUntilDay: args.waitUntilDay, property: args.property, operator: args.operator, value: args.value, link: args.link, segmentId, excludeUnengaged: args.excludeUnengaged, addValue: args.addValue, removeValue: args.removeValue, subscriberListId, emails: args.emails, url: args.url, method: args.method, headers: args.headers, includeContactData: args.includeContactData }
         const body = Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined))
         if (args.nodeType) {
           body.type = args.nodeType

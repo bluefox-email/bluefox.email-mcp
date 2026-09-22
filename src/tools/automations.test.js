@@ -274,6 +274,15 @@ describe('manage_automation_exit_criteria', () => {
     expect(result.content[0].text).toContain('Set exit criteria:')
   })
 
+  test('set exits on a specific email\'s open, not a segment', async () => {
+    const { client, byName } = setup()
+    client.patch.mockResolvedValue({ exitCriteria: { active: true, operator: 'is-opened', value: 'email1' } })
+
+    await byName.manage_automation_exit_criteria.handler({ action: 'set', automationId: 'auto1', operator: 'is-opened', value: 'email1', confirm: true })
+
+    expect(client.patch).toHaveBeenCalledWith('/automations/auto1/exit-criteria', { active: true, operator: 'is-opened', value: 'email1' })
+  })
+
   test('set reports staging when the result carries a draftExitCriteria', async () => {
     const { client, byName } = setup()
     client.patch.mockResolvedValue({ exitCriteria: { active: false }, draftExitCriteria: { active: true, excludeUnengaged: true } })
@@ -321,6 +330,15 @@ describe('manage_automation_node', () => {
     await byName.manage_automation_node.handler({ action: 'add', automationId: 'auto1', nodeType: 'filter-audience', segmentName: 'VIP', operator: 'any', confirm: true })
 
     expect(client.post).toHaveBeenCalledWith('/automations/auto1/node', { type: 'filter-audience', operator: 'any', segmentId: 'seg1' })
+  })
+
+  test('add a filter-audience node that checks a specific email\'s clicks, including the link', async () => {
+    const { client, byName } = setup()
+    client.post.mockResolvedValue(baseAutomation)
+
+    await byName.manage_automation_node.handler({ action: 'add', automationId: 'auto1', nodeType: 'filter-audience', operator: 'is-clicked', value: 'email1', link: 'https://example.com', confirm: true })
+
+    expect(client.post).toHaveBeenCalledWith('/automations/auto1/node', { type: 'filter-audience', operator: 'is-clicked', value: 'email1', link: 'https://example.com' })
   })
 
   test('add a notify node, resolving a subscriber list name', async () => {

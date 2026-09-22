@@ -21,6 +21,13 @@ export function formatTrigger (trigger) {
   }
 }
 
+const EMAIL_ENGAGEMENT_OPERATORS = {
+  'is-opened': 'opened email',
+  'is-not-opened': 'did not open email',
+  'is-clicked': 'clicked email',
+  'is-not-clicked': 'did not click email'
+}
+
 function formatConditionText (condition) {
   if (!condition) {
     return 'any'
@@ -32,7 +39,10 @@ function formatConditionText (condition) {
   if (condition.excludeUnengaged) {
     parts.push('unengaged')
   }
-  if (condition.property || condition.operator) {
+  if (EMAIL_ENGAGEMENT_OPERATORS[condition.operator]) {
+    const link = condition.link ? `, link "${condition.link}"` : ''
+    parts.push(`${EMAIL_ENGAGEMENT_OPERATORS[condition.operator]} (emailId ${condition.value})${link}`)
+  } else if (condition.property || condition.operator) {
     const value = condition.value !== undefined ? ` ${JSON.stringify(condition.value)}` : ''
     parts.push(`${condition.property || ''} ${condition.operator || 'any'}${value}`.trim())
   }
