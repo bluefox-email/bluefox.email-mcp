@@ -20,6 +20,7 @@ import { createProductionAccessTools } from './productionAccess.js'
 import { createContactImportTools } from './contactImport.js'
 import { createContactOpsTools } from './contactOps.js'
 import { createProjectSetupTools } from './projectSetup.js'
+import { createAutomationTools } from './automations.js'
 import { createGalleryTools } from './gallery.js'
 
 export function collectTools (deps) {
@@ -45,6 +46,7 @@ export function collectTools (deps) {
     ...createContactImportTools(deps),
     ...createContactOpsTools(deps),
     ...createProjectSetupTools(deps),
+    ...createAutomationTools(deps),
     ...createGalleryTools(deps)
   ]
 }

@@ -67,6 +67,13 @@ describe('createBluefoxClient', () => {
     )
   })
 
+  test('put() uses the PUT method', async () => {
+    const fetchSpy = mockFetchOnce(200, { status: 200, result: {} })
+    await client.put('/automations/abc/node/def', { type: 'delay', duration: 2 })
+    expect(fetchSpy.mock.calls[0][1].method).toBe('PUT')
+    expect(fetchSpy.mock.calls[0][1].body).toBe(JSON.stringify({ type: 'delay', duration: 2 }))
+  })
+
   test('patch() uses the PATCH method', async () => {
     const fetchSpy = mockFetchOnce(200, { status: 200, result: {} })
     await client.patch('/campaigns/abc', { name: 'New name' })
