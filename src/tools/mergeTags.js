@@ -1,0 +1,3 @@
+// Appended to every email body description - models otherwise guess generic tags like {{name}}, which render empty
+// because contact data only exists nested under `contact` in the template context.
+export const CONTACT_MERGE_TAGS = 'Contact merge tags MUST be prefixed with "contact." - use {{contact.name}}, {{contact.email}}, or {{contact.<customFieldName>}} (custom field names from manage_contact_fields_and_tags). Never use bare {{name}}, {{firstName}} or {{email}} for contact data - they render as empty strings. For a greeting fallback use the DEFAULT helper, e.g. "Hi {{DEFAULT contact.name "there"}},".'

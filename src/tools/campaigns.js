@@ -3,6 +3,7 @@ import { textResult } from '../helpers/errors.js'
 import { normalizeScheduledFor } from '../helpers/scheduledFor.js'
 import { feedsSchema } from './feedsSchema.js'
 import { formatEmailDetail } from './emailLifecycle.js'
+import { CONTACT_MERGE_TAGS } from './mergeTags.js'
 
 export function createCampaignTools ({ client, resolveIdOrRequired, resolveIdOptional }) {
   return [
@@ -14,7 +15,7 @@ export function createCampaignTools ({ client, resolveIdOrRequired, resolveIdOpt
         inputSchema: {
           name: z.string().describe('Internal campaign name - not shown to recipients.'),
           subject: z.string().describe('Email subject line.'),
-          body: z.string().describe('Email body as a Handlebars template string - supports merge tags like {{contact.name}} and {{unsubscribeLink}}, and feed loops. This tool cannot author bluefox.email\'s visual (Chamaileon) editor format or start from a saved template - content is always sent as plain html/text.'),
+          body: z.string().describe(`Email body as a Handlebars template string - supports {{unsubscribeLink}} and feed loops. This tool cannot author bluefox.email's visual (Chamaileon) editor format or start from a saved template - content is always sent as plain html/text. ${CONTACT_MERGE_TAGS}`),
           bodyType: z.enum(['html', 'text']).optional().describe('Defaults to "text" if omitted.'),
           subscriberListId: z.string().optional().describe('The subscriber list to send to, by id.'),
           subscriberListName: z.string().optional().describe('The subscriber list to send to, by name - looked up automatically. Provide this if you do not already have the id.'),

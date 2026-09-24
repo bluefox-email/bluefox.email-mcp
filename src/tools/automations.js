@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { textResult } from '../helpers/errors.js'
 import { formatAutomationDetail, formatAutomationSummaryLine, formatTrigger, formatExitCriteria } from './automationFormat.js'
+import { CONTACT_MERGE_TAGS } from './mergeTags.js'
 
 const NODE_TYPES = ['delay', 'send-email', 'filter-audience', 'branch', 'complete', 'set-value', 'notify', 'manage-tags', 'webhook', 'condition']
 
@@ -314,7 +315,7 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           subject: z.string().optional().describe('update only, send-email/notify - see this tool\'s description for when this applies instead of manage_automation_email_content.'),
           previewText: z.string().optional().describe('update only, send-email/notify - inbox preview text.'),
           bodyType: z.enum(['html', 'text']).optional().describe('update only, send-email/notify. Omit to keep using the visual (Chamaileon) editor.'),
-          body: z.string().optional().describe('update only, send-email/notify - HTML/text content, only when bodyType is set. This tool cannot author the visual (Chamaileon) editor format.'),
+          body: z.string().optional().describe(`update only, send-email/notify - HTML/text content (a Handlebars template string, supports {{unsubscribeLink}} and feed loops), only when bodyType is set. This tool cannot author the visual (Chamaileon) editor format. ${CONTACT_MERGE_TAGS}`),
           senderIdentityId: z.string().optional().describe('update only, send-email/notify.'),
           replyTo: z.string().optional().describe('update only, send-email/notify.'),
           feeds: FEED_SCHEMA.describe('update only, send-email/notify - RSS/Atom/JSON feeds pulled into the body at send time. Only usable with bodyType "html"/"text".'),
@@ -421,7 +422,7 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           subject: z.string().optional().describe('update only.'),
           previewText: z.string().optional().describe('update only - inbox preview text, meaningfully affects open rates.'),
           bodyType: z.enum(['html', 'text']).optional().describe('update only.'),
-          body: z.string().optional().describe('update only - HTML/text content. This tool cannot author the visual (Chamaileon) editor format.'),
+          body: z.string().optional().describe(`update only - HTML/text content (a Handlebars template string, supports {{unsubscribeLink}} and feed loops). This tool cannot author the visual (Chamaileon) editor format. ${CONTACT_MERGE_TAGS}`),
           senderIdentityId: z.string().optional().describe('update only.'),
           replyTo: z.string().optional().describe('update only.'),
           feeds: FEED_SCHEMA.describe('update only - replaces the full feeds list. RSS/Atom/JSON feeds pulled into this email\'s body at send time (see the "body" field for how to reference a feed\'s variableName from the template). Only usable when bodyType is "html"/"text" (or was previously set) - not for the visual Chamaileon editor.'),
