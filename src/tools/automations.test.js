@@ -516,6 +516,54 @@ describe('manage_automation_node', () => {
 })
 
 describe('manage_automation_email_content', () => {
+  test('list shows each email with the step that sends it', async () => {
+    const { client, byName } = setup()
+    const automation = {
+      ...baseAutomation,
+      sequence: [{ _id: 'n1', type: 'send-email', emailId: 'e1' }],
+      draftSequence: [{ _id: 'n1', type: 'send-email', emailId: 'e1' }, { _id: 'n2', type: 'send-email', emailId: 'e2' }]
+    }
+    client.get.mockImplementation(path => Promise.resolve(path.endsWith('/email')
+      ? { count: 4, items: [{ _id: 'e1', subject: 'Welcome' }, { _id: 'e2', subject: 'Follow up' }, { _id: 'e3' }] }
+      : automation))
+
+    const result = await byName.manage_automation_email_content.handler({ action: 'list', automationId: 'auto1' })
+
+    expect(client.get).toHaveBeenCalledWith('/automations/auto1/email', { limit: 30 })
+    expect(result.content[0].text).toContain('4 email(s):')
+    expect(result.content[0].text).toContain('- "Welcome" (emailId e1) - Step 1: Send email (emailId e1)')
+    expect(result.content[0].text).toContain('- "Follow up" (emailId e2) - Step 2: Send email (emailId e2) (draft only, not live yet)')
+    expect(result.content[0].text).toContain('- "(no subject yet)" (emailId e3) - not used by any step')
+    expect(result.content[0].text).toContain('(more not shown)')
+  })
+
+  test('list reports when the automation has no emails', async () => {
+    const { client, byName } = setup()
+    client.get.mockImplementation(path => Promise.resolve(path.endsWith('/email') ? { count: 0, items: [] } : baseAutomation))
+
+    const result = await byName.manage_automation_email_content.handler({ action: 'list', automationId: 'auto1' })
+
+    expect(result.content[0].text).toBe('This automation has no emails yet.')
+  })
+
+  test('list omits the "more not shown" note when every email was returned', async () => {
+    const { client, byName } = setup()
+    client.get.mockImplementation(path => Promise.resolve(path.endsWith('/email') ? { count: 1, items: [{ _id: 'e1', subject: 'Welcome' }] } : baseAutomation))
+
+    const result = await byName.manage_automation_email_content.handler({ action: 'list', automationId: 'auto1' })
+
+    expect(result.content[0].text).not.toContain('more not shown')
+  })
+
+  test('get and update require emailId', async () => {
+    const { client, byName } = setup()
+
+    const result = await byName.manage_automation_email_content.handler({ action: 'get', automationId: 'auto1' })
+
+    expect(client.get).not.toHaveBeenCalled()
+    expect(result.content[0].text).toContain('emailId is required for "get"')
+  })
+
   test('get formats a chamaileon email without a body dump', async () => {
     const { client, byName } = setup()
     client.get.mockResolvedValue({ _id: 'email1', subject: 'Welcome', previewText: 'Hi there' })
@@ -618,14 +666,23 @@ describe('manage_automation_running_contacts', () => {
     expect(result.content[0].text).toBe('No contacts are currently running or paused in this automation.')
   })
 
-  test('counts lists each step with its contact count', async () => {
+  test('counts names each step by position and what it does', async () => {
     const { client, byName } = setup()
-    client.get.mockResolvedValue({ n1: 3, n2: 1 })
+    const sequence = [
+      { _id: 'n1', type: 'delay', duration: 2, durationType: 'day' },
+      { _id: 'b1', type: 'branch', branches: [{ _id: 'arm1', condition: {}, sequence: [{ _id: 'n2', type: 'send-email', emailId: 'e1' }] }] }
+    ]
+    client.get.mockImplementation(path => Promise.resolve(path.endsWith('/running-nodes')
+      ? { n1: 3, n2: 1, gone: 2, undefined: 4 }
+      : { ...baseAutomation, sequence }))
 
     const result = await byName.manage_automation_running_contacts.handler({ action: 'counts', automationId: 'auto1' })
 
-    expect(result.content[0].text).toContain('n1: 3 contact(s)')
-    expect(result.content[0].text).toContain('n2: 1 contact(s)')
+    expect(client.get).toHaveBeenCalledWith('/automations/auto1')
+    expect(result.content[0].text).toContain('- Step 1: Wait 2 day(s) (nodeId n1): 3 contact(s)')
+    expect(result.content[0].text).toContain('- Step 2 > Branch 1 > Step 1: Send email (emailId e1) (nodeId n2): 1 contact(s)')
+    expect(result.content[0].text).toContain('- Step no longer in the live sequence (nodeId gone): 2 contact(s)')
+    expect(result.content[0].text).toContain('- Enrolled, not at a step yet (nodeId "trigger"): 4 contact(s)')
   })
 
   test('list requires nodeId', async () => {
@@ -665,6 +722,101 @@ describe('manage_automation_running_contacts', () => {
     const result = await byName.manage_automation_running_contacts.handler({ action: 'list', automationId: 'auto1', nodeId: 'n1' })
 
     expect(result.content[0].text).toContain('contact1 (paused)')
+  })
+})
+
+describe('get_automation_stats', () => {
+  const zeroStats = { opens: 0, clicks: 0, uniqueOpens: 0, uniqueClicks: 0, sent: 0, failed: 0, bounce: 0, complaint: 0 }
+
+  test('overview shows contact counts, totals and per-email stats with their step', async () => {
+    const { client, byName } = setup()
+    const automation = { ...baseAutomation, status: 'active', sequence: [{ _id: 'n1', type: 'send-email', emailId: 'e1' }] }
+    client.get.mockImplementation(path => Promise.resolve(path.endsWith('/stats')
+      ? {
+          contacts: { total: 10, active: 4, completed: 5, error: 1 },
+          totals: { opens: 6, clicks: 2, uniqueOpens: 5, uniqueClicks: 2, sent: 8, failed: 1, bounce: 1, complaint: 0 },
+          emails: [{ emailId: 'e1', subject: 'Welcome', opens: 6, clicks: 2, uniqueOpens: 5, uniqueClicks: 2, sent: 8, failed: 1, bounce: 1, complaint: 0 }, { emailId: 'e9', ...zeroStats }]
+        }
+      : automation))
+
+    const result = await byName.get_automation_stats.handler({ action: 'overview', automationId: 'auto1', from: '2026-01-01', to: '2026-02-01' })
+
+    expect(client.get).toHaveBeenCalledWith('/automations/auto1/stats', { from: '2026-01-01', to: '2026-02-01' })
+    const text = result.content[0].text
+    expect(text).toContain('"Welcome flow" (id auto1) - status: active')
+    expect(text).toContain('Contacts: 10 total - 4 active (running or waiting), 5 completed, 1 errored')
+    expect(text).toContain('All emails: 8 sent, 1 failed, 6 opens (5 unique), 2 clicks (2 unique), 1 bounced, 0 complaints')
+    expect(text).toContain('- "Welcome" (emailId e1, Step 1: Send email (emailId e1)): 8 sent')
+    expect(text).toContain('- "(no subject yet)" (emailId e9, not used by any step): 0 sent')
+  })
+
+  test('overview notes when the automation has no emails', async () => {
+    const { client, byName } = setup()
+    client.get.mockImplementation(path => Promise.resolve(path.endsWith('/stats')
+      ? { contacts: { total: 0, active: 0, completed: 0, error: 0 }, totals: zeroStats, emails: [] }
+      : baseAutomation))
+
+    const result = await byName.get_automation_stats.handler({ action: 'overview', automationId: 'auto1' })
+
+    expect(client.get).toHaveBeenCalledWith('/automations/auto1/stats', {})
+    expect(result.content[0].text).toContain('No emails in this automation yet.')
+  })
+
+  test('email and recipients require emailId', async () => {
+    const { client, byName } = setup()
+
+    const result = await byName.get_automation_stats.handler({ action: 'recipients', automationId: 'auto1' })
+
+    expect(client.get).not.toHaveBeenCalled()
+    expect(result.content[0].text).toContain('emailId is required for "recipients"')
+  })
+
+  test('email returns the stats for one email', async () => {
+    const { client, byName } = setup()
+    client.get.mockResolvedValue({ ...zeroStats, sent: 3 })
+
+    const result = await byName.get_automation_stats.handler({ action: 'email', automationId: 'auto1', emailId: 'e1', from: '2026-01-01' })
+
+    expect(client.get).toHaveBeenCalledWith('/automations/auto1/email/e1/stats', { from: '2026-01-01' })
+    expect(result.content[0].text).toBe('Stats for emailId e1: 3 sent, 0 failed, 0 opens (0 unique), 0 clicks (0 unique), 0 bounced, 0 complaints')
+  })
+
+  test('recipients passes filters and paginates', async () => {
+    const { client, byName } = setup()
+    client.get.mockResolvedValue({
+      count: 3,
+      items: [
+        { email: 'a@example.com', status: 'sent', sentAt: '2026-01-01T00:00:00.000Z', opens: 2, clicks: 1, unsubscribed: true },
+        { email: 'b@example.com', status: 'failed' }
+      ]
+    })
+
+    const result = await byName.get_automation_stats.handler({ action: 'recipients', automationId: 'auto1', emailId: 'e1', opened: false, status: 'sent', limit: 2 })
+
+    expect(client.get).toHaveBeenCalledWith('/automations/auto1/email/e1/recipients', { limit: 2, skip: undefined, filter: { status: 'sent', opened: false } })
+    const text = result.content[0].text
+    expect(text).toContain('3 recipient(s) total, showing 2 (1 more - pass skip=2 for the next page)')
+    expect(text).toContain('a@example.com - sent at 2026-01-01T00:00:00.000Z, 2 opens, 1 clicks (unsubscribed)')
+    expect(text).toContain('b@example.com - failed, 0 opens, 0 clicks')
+  })
+
+  test('recipients without filters sends no filter and shows no "more" note on the last page', async () => {
+    const { client, byName } = setup()
+    client.get.mockResolvedValue({ count: 1, items: [{ email: 'a@example.com', status: 'sent', opens: 0, clicks: 0 }] })
+
+    const result = await byName.get_automation_stats.handler({ action: 'recipients', automationId: 'auto1', emailId: 'e1' })
+
+    expect(client.get).toHaveBeenCalledWith('/automations/auto1/email/e1/recipients', { limit: undefined, skip: undefined })
+    expect(result.content[0].text).not.toContain('more')
+  })
+
+  test('recipients reports when nobody matches', async () => {
+    const { client, byName } = setup()
+    client.get.mockResolvedValue({ count: 0, items: [] })
+
+    const result = await byName.get_automation_stats.handler({ action: 'recipients', automationId: 'auto1', emailId: 'e1', clicked: true })
+
+    expect(result.content[0].text).toBe('No recipients match.')
   })
 })
 

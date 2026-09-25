@@ -142,6 +142,23 @@ export function formatAutomationDetail (automation) {
   return lines.join('\n')
 }
 
+// Flattens the tree into one entry per node with a readable position ("Step 2 > Branch 1 > Step 1: Wait 2 day(s)"),
+// so per-step counts and per-email stats can name the step instead of printing a bare node id.
+export function listSteps (sequence, prefix = '', steps = []) {
+  (sequence || []).forEach((node, index) => {
+    const position = `${prefix}Step ${index + 1}`
+    steps.push({ node, label: `${position}: ${formatNodeSummary(node).replace(/:$/, '')}` })
+    if (node.type === 'branch') {
+      (node.branches || []).forEach((branch, branchIndex) => listSteps(branch.sequence, `${position} > Branch ${branchIndex + 1} > `, steps))
+    }
+  })
+  return steps
+}
+
+export function formatEmailStats (stats) {
+  return `${stats.sent} sent, ${stats.failed || 0} failed, ${stats.opens} opens (${stats.uniqueOpens} unique), ${stats.clicks} clicks (${stats.uniqueClicks} unique), ${stats.bounce} bounced, ${stats.complaint} complaints`
+}
+
 export function formatAutomationSummaryLine (automation) {
   return `"${automation.name}" (id ${automation._id}) - ${automation.status}`
 }

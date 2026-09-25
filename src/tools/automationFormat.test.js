@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { formatAutomationDetail, formatAutomationSummaryLine, formatTrigger, formatExitCriteria } from './automationFormat.js'
+import { formatAutomationDetail, formatAutomationSummaryLine, formatTrigger, formatExitCriteria, listSteps } from './automationFormat.js'
 
 describe('formatTrigger', () => {
   test('reports when no trigger is configured', () => {
@@ -215,5 +215,26 @@ describe('formatAutomationDetail - staged send-email content on an active automa
 describe('formatAutomationSummaryLine', () => {
   test('formats a name/id/status one-liner', () => {
     expect(formatAutomationSummaryLine({ name: 'Welcome flow', _id: 'auto1', status: 'active' })).toBe('"Welcome flow" (id auto1) - active')
+  })
+})
+
+describe('listSteps', () => {
+  test('labels nested steps by position and tolerates missing branches/days', () => {
+    const steps = listSteps([
+      { _id: 'n1', type: 'delay', durationType: 'wait-until-day' },
+      { _id: 'b1', type: 'branch' },
+      { _id: 'b2', type: 'branch', branches: [{ _id: 'arm1', sequence: [{ _id: 'n2', type: 'complete' }] }] }
+    ])
+
+    expect(steps.map(step => step.label)).toEqual([
+      'Step 1: Wait until',
+      'Step 2: Branch',
+      'Step 3: Branch',
+      'Step 3 > Branch 1 > Step 1: End automation'
+    ])
+  })
+
+  test('returns nothing for a missing sequence', () => {
+    expect(listSteps(undefined)).toEqual([])
   })
 })

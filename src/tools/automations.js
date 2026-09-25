@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { textResult } from '../helpers/errors.js'
-import { formatAutomationDetail, formatAutomationSummaryLine, formatTrigger, formatExitCriteria } from './automationFormat.js'
+import { formatAutomationDetail, formatAutomationSummaryLine, formatTrigger, formatExitCriteria, listSteps, formatEmailStats } from './automationFormat.js'
 
 const NODE_TYPES = ['delay', 'send-email', 'filter-audience', 'branch', 'complete', 'set-value', 'notify', 'manage-tags', 'webhook', 'condition']
 
@@ -20,6 +20,19 @@ const CONFIRM_DESCRIPTION = 'Set to true only after showing the user the automat
 
 async function resolveAutomationId ({ resolveIdOrRequired, id, name }) {
   return resolveIdOrRequired({ id, name, resourcePath: '/automations', filterField: 'name', label: 'automation' })
+}
+
+// Which step sends a given email - checks the live sequence first, then the unmerged draft
+function findEmailStepLabel (automation, emailId) {
+  const live = listSteps(automation.sequence).find(step => step.node.emailId === emailId)
+  if (live) {
+    return live.label
+  }
+  const draft = listSteps(automation.draftSequence).find(step => step.node.emailId === emailId)
+  if (draft) {
+    return `${draft.label} (draft only, not live yet)`
+  }
+  return 'not used by any step'
 }
 
 // Shared by manage_automation's create action and manage_automation_trigger's set action, so the
@@ -411,13 +424,13 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
     {
       name: 'manage_automation_email_content',
       config: {
-        title: 'Get or update a send-email/notify step\'s email content',
-        description: 'Every send-email/notify node has a companion email document (subject, body, etc.), addressed by its own emailId - visible on the node in manage_automation\'s "get" output.',
+        title: 'List, get or update a send-email/notify step\'s email content',
+        description: 'Every send-email/notify node has a companion email document (subject, body, etc.), addressed by its own emailId - visible on the node in manage_automation\'s "get" output. "list" shows every email in the automation with the step that sends it. For how an email is performing, use get_automation_stats.',
         inputSchema: {
-          action: z.enum(['get', 'update']),
+          action: z.enum(['list', 'get', 'update']),
           automationId: z.string().optional(),
           automationName: z.string().optional().describe('Looked up automatically. Provide this if you do not already have the id.'),
-          emailId: z.string().describe('From the send-email/notify node\'s emailId field.'),
+          emailId: z.string().optional().describe('get/update, required - from the send-email/notify node\'s emailId field (or from "list").'),
           subject: z.string().optional().describe('update only.'),
           previewText: z.string().optional().describe('update only - inbox preview text, meaningfully affects open rates.'),
           bodyType: z.enum(['html', 'text']).optional().describe('update only.'),
@@ -430,6 +443,22 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
       },
       handler: async (args) => {
         const automationId = await resolveAutomationId({ resolveIdOrRequired, id: args.automationId, name: args.automationName })
+
+        if (args.action === 'list') {
+          const [automation, emails] = await Promise.all([
+            client.get(`/automations/${automationId}`),
+            client.get(`/automations/${automationId}/email`, { limit: 30 })
+          ])
+          if (emails.count === 0) {
+            return textResult('This automation has no emails yet.')
+          }
+          const lines = emails.items.map(email => `- "${email.subject || '(no subject yet)'}" (emailId ${email._id}) - ${findEmailStepLabel(automation, email._id)}`)
+          return textResult(`${emails.count} email(s):\n${lines.join('\n')}${emails.count > emails.items.length ? '\n(more not shown)' : ''}`)
+        }
+
+        if (!args.emailId) {
+          return textResult(`emailId is required for "${args.action}" - use action "list" to see this automation's emails.`)
+        }
 
         if (args.action === 'get') {
           const email = await client.get(`/automations/${automationId}/email/${args.emailId}`)
@@ -477,7 +506,7 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
       name: 'manage_automation_running_contacts',
       config: {
         title: 'See who is currently running through an automation',
-        description: 'Read-only. "counts" shows how many contacts are currently sitting at each step (status running or paused - completed/errored runs are never counted). "list" drills down to the actual contacts at one specific step.',
+        description: 'Read-only. "counts" shows how many contacts are currently sitting at each step, named by position and what the step does (status running or paused - completed/errored runs are never counted). "list" drills down to the actual contacts at one specific step.',
         inputSchema: {
           action: z.enum(['counts', 'list']),
           automationId: z.string().optional(),
@@ -491,12 +520,22 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
         const automationId = await resolveAutomationId({ resolveIdOrRequired, id: args.automationId, name: args.automationName })
 
         if (args.action === 'counts') {
-          const counts = await client.get(`/automations/${automationId}/running-nodes`)
+          const [counts, automation] = await Promise.all([
+            client.get(`/automations/${automationId}/running-nodes`),
+            client.get(`/automations/${automationId}`)
+          ])
           const entries = Object.entries(counts)
           if (entries.length === 0) {
             return textResult('No contacts are currently running or paused in this automation.')
           }
-          return textResult(`Currently running/paused, by step (use manage_automation "get" to match a step id to its position):\n${entries.map(([nodeId, count]) => `${nodeId}: ${count} contact(s)`).join('\n')}`)
+          const labels = Object.fromEntries(listSteps(automation.sequence).map(step => [step.node._id, step.label]))
+          const lines = entries.map(([nodeId, count]) => {
+            if (nodeId === 'undefined' || nodeId === 'null') {
+              return `- Enrolled, not at a step yet (nodeId "trigger"): ${count} contact(s)`
+            }
+            return `- ${labels[nodeId] || 'Step no longer in the live sequence'} (nodeId ${nodeId}): ${count} contact(s)`
+          })
+          return textResult(`Currently running/paused, by step (use action "list" with a nodeId to see who they are):\n${lines.join('\n')}`)
         }
 
         if (!args.nodeId) {
@@ -508,6 +547,92 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
         }
         const lines = result.items.map(item => `${item.contactId?.email || item.contactId?._id || item.contactId} (${item.status})`).join('\n')
         return textResult(`${result.count} contact(s) at this step:\n${lines}${result.count > result.items.length ? '\n(more not shown - pass skip to page through the rest)' : ''}`)
+      }
+    },
+    {
+      name: 'get_automation_stats',
+      config: {
+        title: 'Get automation stats',
+        description: 'Read-only. "overview": how many contacts have gone through the automation (active/completed/errored) plus sends/opens/clicks/bounces/complaints for each of its emails and in total. "email": the same stats for one email. "recipients": who received one email and whether they opened/clicked/bounced/unsubscribed. For which step contacts are at right now, use manage_automation_running_contacts.',
+        inputSchema: {
+          action: z.enum(['overview', 'email', 'recipients']),
+          automationId: z.string().optional(),
+          automationName: z.string().optional().describe('Looked up automatically. Provide this if you do not already have the id.'),
+          emailId: z.string().optional().describe('email/recipients, required - from the send-email/notify node\'s emailId, or from the overview.'),
+          from: z.string().optional().describe('overview/email - only count email events on or after this date (ISO 8601). Contact counts are always all-time. Range max 366 days.'),
+          to: z.string().optional().describe('overview/email - only count email events on or before this date (ISO 8601).'),
+          email: z.string().optional().describe('recipients - filter to a single recipient email address.'),
+          status: z.enum(['scheduled', 'being-sent', 'sent', 'failed']).optional().describe('recipients.'),
+          opened: z.boolean().optional().describe('recipients - did/did not open this email.'),
+          clicked: z.boolean().optional().describe('recipients - did/did not click a link in this email.'),
+          bounced: z.boolean().optional().describe('recipients.'),
+          unsubscribed: z.boolean().optional().describe('recipients - unsubscribed via this email\'s link.'),
+          limit: z.number().optional().describe('recipients - max per page. Defaults to 10, capped at 30.'),
+          skip: z.number().optional().describe('recipients - for pagination.')
+        }
+      },
+      handler: async (args) => {
+        const automationId = await resolveAutomationId({ resolveIdOrRequired, id: args.automationId, name: args.automationName })
+        const range = {}
+        if (args.from) {
+          range.from = args.from
+        }
+        if (args.to) {
+          range.to = args.to
+        }
+
+        if (args.action === 'overview') {
+          const [stats, automation] = await Promise.all([
+            client.get(`/automations/${automationId}/stats`, range),
+            client.get(`/automations/${automationId}`)
+          ])
+          const { contacts, totals, emails } = stats
+          const lines = [
+            `"${automation.name}" (id ${automation._id}) - status: ${automation.status}`,
+            `Contacts: ${contacts.total} total - ${contacts.active} active (running or waiting), ${contacts.completed} completed, ${contacts.error} errored`
+          ]
+          if (emails.length === 0) {
+            lines.push('No emails in this automation yet.')
+          } else {
+            lines.push(`All emails: ${formatEmailStats(totals)}`)
+            lines.push('Per email:')
+            emails.forEach(email => {
+              lines.push(`- "${email.subject || '(no subject yet)'}" (emailId ${email.emailId}, ${findEmailStepLabel(automation, email.emailId)}): ${formatEmailStats(email)}`)
+            })
+          }
+          return textResult(lines.join('\n'))
+        }
+
+        if (!args.emailId) {
+          return textResult(`emailId is required for "${args.action}" - use action "overview" to see this automation's emails.`)
+        }
+
+        if (args.action === 'email') {
+          const stats = await client.get(`/automations/${automationId}/email/${args.emailId}/stats`, range)
+          return textResult(`Stats for emailId ${args.emailId}: ${formatEmailStats(stats)}`)
+        }
+
+        const filter = {}
+        for (const field of ['email', 'status', 'opened', 'clicked', 'bounced', 'unsubscribed']) {
+          if (args[field] !== undefined) {
+            filter[field] = args[field]
+          }
+        }
+        const query = { limit: args.limit, skip: args.skip }
+        if (Object.keys(filter).length) {
+          query.filter = filter
+        }
+        const result = await client.get(`/automations/${automationId}/email/${args.emailId}/recipients`, query)
+        if (result.count === 0) {
+          return textResult('No recipients match.')
+        }
+        const lines = result.items.map(r => {
+          const flags = ['bounced', 'complained', 'unsubscribed', 'paused', 'subscribed', 'resubscribed'].filter(f => r[f]).join(', ')
+          return `${r.email} - ${r.status}${r.sentAt ? ` at ${r.sentAt}` : ''}, ${r.opens || 0} opens, ${r.clicks || 0} clicks${flags ? ` (${flags})` : ''}`
+        })
+        const shownSoFar = (args.skip || 0) + result.items.length
+        const more = shownSoFar < result.count ? ` (${result.count - shownSoFar} more - pass skip=${shownSoFar} for the next page)` : ''
+        return textResult(`${result.count} recipient(s) total, showing ${result.items.length}${more}:\n${lines.join('\n')}`)
       }
     },
     lifecycleTool({ client, resolveIdOrRequired }, {
