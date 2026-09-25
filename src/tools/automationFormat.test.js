@@ -106,6 +106,7 @@ describe('formatAutomationDetail', () => {
         { _id: 'n1', type: 'delay', duration: 2, durationType: 'day' },
         { _id: 'n2', type: 'delay', durationType: 'wait-until-time', waitUntilTime: '08:00' },
         { _id: 'n3', type: 'delay', durationType: 'wait-until-day', waitUntilDay: 'monday' },
+        { _id: 'n3b', type: 'delay', durationType: 'wait-until-day', waitUntilDay: ['monday', 'thursday'], waitUntilTime: '09:00' },
         { _id: 'n4', type: 'delay', durationType: 'wait-until-weekday' },
         { _id: 'n4b', type: 'delay', durationType: 'wait-until-weekday', waitUntilTime: '08:00' },
         { _id: 'n5', type: 'send-email', emailId: 'email1' },
@@ -144,6 +145,7 @@ describe('formatAutomationDetail', () => {
     expect(text).toContain('Wait 2 day(s)')
     expect(text).toContain('Wait until 08:00')
     expect(text).toContain('Wait until monday')
+    expect(text).toContain('Wait until monday or thursday 09:00')
     expect(text).toContain('Wait until the next weekday')
     expect(text).toContain('Wait until the next weekday at 08:00')
     expect(text).toContain('Send email (emailId email1)')

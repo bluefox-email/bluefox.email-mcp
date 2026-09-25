@@ -65,7 +65,7 @@ function formatNodeSummary (node) {
         return `Wait until ${node.waitUntilTime}`
       }
       if (node.durationType === 'wait-until-day') {
-        return `Wait until ${node.waitUntilDay} ${node.waitUntilTime || ''}`.trim()
+        return `Wait until ${[].concat(node.waitUntilDay || []).join(' or ')} ${node.waitUntilTime || ''}`.trim()
       }
       if (node.durationType === 'wait-until-weekday') {
         return `Wait until the next weekday${node.waitUntilTime ? ` at ${node.waitUntilTime}` : ''}`
