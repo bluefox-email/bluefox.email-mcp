@@ -14,8 +14,64 @@ async function ensureNameField (client) {
   }
 }
 
-export function createContactTools ({ client }) {
+function formatContactLine (contact) {
+  const customFields = extractCustomFields(contact)
+  const customFieldsText = Object.keys(customFields).length
+    ? ` - ${Object.entries(customFields).map(([key, value]) => `${key}: ${value}`).join(', ')}`
+    : ''
+  return `${contact.email}${contact.name ? ` (${contact.name})` : ''} - tags: ${(contact.tags || []).join(', ') || 'none'}${customFieldsText}`
+}
+
+export function createContactTools ({ client, resolveIdOptional }) {
   return [
+    {
+      name: 'list_contacts',
+      config: {
+        title: 'List and filter contacts',
+        description: 'Lists contacts on the project, optionally narrowed to a saved segment (by name or id), to contacts carrying given tags, and/or to contacts whose custom fields equal given values - all filters are AND-ed. With no filters, lists everyone. Paginated: use skip for the next page. Use this instead of export_contacts to answer "who is in X".',
+        inputSchema: {
+          segmentId: z.string().optional(),
+          segmentName: z.string().optional().describe('A segment already created on the project - looked up automatically.'),
+          tags: z.array(z.string()).optional().describe('Only contacts that have every one of these tags.'),
+          fields: z.record(z.union([z.string(), z.number(), z.boolean()])).optional().describe('Only contacts whose custom field equals the value, keyed by field name (e.g. {"plan": "pro"}). The field must be registered on the project.'),
+          limit: z.number().int().min(1).max(100).optional().describe('Defaults to 50.'),
+          skip: z.number().int().min(0).optional().describe('How many matching contacts to skip, for paging. Defaults to 0.')
+        }
+      },
+      handler: async (args) => {
+        const segmentId = await resolveIdOptional({
+          id: args.segmentId,
+          name: args.segmentName,
+          resourcePath: '/segments',
+          filterField: 'name',
+          label: 'segment'
+        })
+        const conditions = [
+          ...(args.tags || []).map(tag => ({ operator: 'has-tag', value: tag })),
+          ...Object.entries(args.fields || {}).map(([property, value]) => ({ property, operator: 'equals', value }))
+        ]
+        const filter = {
+          segmentId,
+          segment: conditions.length ? JSON.stringify({ groups: [{ conditions }] }) : undefined
+        }
+        const limit = args.limit || 50
+        const skip = args.skip || 0
+
+        const result = await client.get('/contacts', { filter, limit, skip })
+        if (!result.count) {
+          return textResult('No contacts match.')
+        }
+        if (!result.items.length) {
+          return textResult(`${result.count} contact(s) match, but skip ${skip} is past the end.`)
+        }
+
+        const lines = [`${result.count} contact(s) match. Showing ${skip + 1}-${skip + result.items.length}:`, ...result.items.map(formatContactLine)]
+        if (skip + result.items.length < result.count) {
+          lines.push(`Pass skip: ${skip + result.items.length} for the next page.`)
+        }
+        return textResult(lines.join('\n'))
+      }
+    },
     {
       name: 'create_contact',
       config: {

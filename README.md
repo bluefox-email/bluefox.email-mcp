@@ -161,6 +161,7 @@ of connecting in a broken state.
 | Tool | What it does |
 |---|---|
 | `create_contact` / `get_contact` / `update_contact` / `delete_contact` | Manage a single contact. |
+| `list_contacts` | List contacts, filtered by a saved segment (name or id), tags, and/or custom field values. |
 | `import_contacts` | Bulk-create (or subscribe) many contacts at once from a list of rows. |
 | `bulk_update_contacts` | Apply one action (delete, tag/untag, suppress, subscribe/unsubscribe) to many contacts by email. |
 | `clean_contacts` | Find (and optionally delete) contacts already suppressed for bounce or complaint. |
