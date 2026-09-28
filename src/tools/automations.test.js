@@ -663,7 +663,7 @@ describe('manage_automation_running_contacts', () => {
     const result = await byName.manage_automation_running_contacts.handler({ action: 'counts', automationId: 'auto1' })
 
     expect(client.get).toHaveBeenCalledWith('/automations/auto1/running-nodes')
-    expect(result.content[0].text).toBe('No contacts are currently running or paused in this automation.')
+    expect(result.content[0].text).toBe('No contacts are currently running or waiting in this automation.')
   })
 
   test('counts names each step by position and what it does', async () => {
@@ -682,7 +682,7 @@ describe('manage_automation_running_contacts', () => {
     expect(result.content[0].text).toContain('- Step 1: Wait 2 day(s) (nodeId n1): 3 contact(s)')
     expect(result.content[0].text).toContain('- Step 2 > Branch 1 > Step 1: Send email (emailId e1) (nodeId n2): 1 contact(s)')
     expect(result.content[0].text).toContain('- Step no longer in the live sequence (nodeId gone): 2 contact(s)')
-    expect(result.content[0].text).toContain('- Enrolled, not at a step yet (nodeId "trigger"): 4 contact(s)')
+    expect(result.content[0].text).toContain('- Trigger, not at a step yet (nodeId "trigger"): 4 contact(s)')
   })
 
   test('list requires nodeId', async () => {
@@ -713,6 +713,15 @@ describe('manage_automation_running_contacts', () => {
     expect(client.get).toHaveBeenCalledWith('/automations/auto1/running-nodes/trigger', { limit: 1, skip: undefined })
     expect(result.content[0].text).toContain('a@example.com (running)')
     expect(result.content[0].text).toContain('more not shown')
+  })
+
+  test('list shows when a waiting contact continues', async () => {
+    const { client, byName } = setup()
+    client.get.mockResolvedValue({ count: 1, items: [{ contactId: { email: 'a@example.com' }, status: 'paused', pauseUntil: '2026-10-01T09:00:00.000Z' }] })
+
+    const result = await byName.manage_automation_running_contacts.handler({ action: 'list', automationId: 'auto1', nodeId: 'n1' })
+
+    expect(result.content[0].text).toContain('a@example.com (waiting until 2026-10-01T09:00:00.000Z)')
   })
 
   test('list falls back to the raw contactId when not populated', async () => {

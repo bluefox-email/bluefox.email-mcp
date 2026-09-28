@@ -36,6 +36,14 @@ function findEmailStepLabel (automation, emailId) {
   return 'not used by any step'
 }
 
+// A paused run is waiting at a delay step, not stuck - say when it continues
+function formatRunningStatus (item) {
+  if (item.status === 'paused' && item.pauseUntil) {
+    return `waiting until ${new Date(item.pauseUntil).toISOString()}`
+  }
+  return item.status
+}
+
 // Shared by manage_automation's create action and manage_automation_trigger's set action, so the
 // two ways to end up with a trigger body build it identically.
 async function buildTriggerFromArgs ({ resolveIdOptional, args }) {
@@ -507,7 +515,7 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
       name: 'manage_automation_running_contacts',
       config: {
         title: 'See who is currently running through an automation',
-        description: 'Read-only. "counts" shows how many contacts are currently sitting at each step, named by position and what the step does (status running or paused - completed/errored runs are never counted). "list" drills down to the actual contacts at one specific step.',
+        description: 'Read-only. "counts" shows how many contacts are currently sitting at each step, named by position and what the step does (running, or waiting at a delay step - completed/errored runs are never counted). "list" drills down to the actual contacts at one specific step, with when each waiting contact continues (UTC).',
         inputSchema: {
           action: z.enum(['counts', 'list']),
           automationId: z.string().optional(),
@@ -527,16 +535,16 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           ])
           const entries = Object.entries(counts)
           if (entries.length === 0) {
-            return textResult('No contacts are currently running or paused in this automation.')
+            return textResult('No contacts are currently running or waiting in this automation.')
           }
           const labels = Object.fromEntries(listSteps(automation.sequence).map(step => [step.node._id, step.label]))
           const lines = entries.map(([nodeId, count]) => {
             if (nodeId === 'undefined' || nodeId === 'null') {
-              return `- Enrolled, not at a step yet (nodeId "trigger"): ${count} contact(s)`
+              return `- Trigger, not at a step yet (nodeId "trigger"): ${count} contact(s)`
             }
             return `- ${labels[nodeId] || 'Step no longer in the live sequence'} (nodeId ${nodeId}): ${count} contact(s)`
           })
-          return textResult(`Currently running/paused, by step (use action "list" with a nodeId to see who they are):\n${lines.join('\n')}`)
+          return textResult(`Currently running/waiting, by step (use action "list" with a nodeId to see who they are):\n${lines.join('\n')}`)
         }
 
         if (!args.nodeId) {
@@ -546,7 +554,7 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
         if (result.count === 0) {
           return textResult('No contacts are currently at this step.')
         }
-        const lines = result.items.map(item => `${item.contactId?.email || item.contactId?._id || item.contactId} (${item.status})`).join('\n')
+        const lines = result.items.map(item => `${item.contactId?.email || item.contactId?._id || item.contactId} (${formatRunningStatus(item)})`).join('\n')
         return textResult(`${result.count} contact(s) at this step:\n${lines}${result.count > result.items.length ? '\n(more not shown - pass skip to page through the rest)' : ''}`)
       }
     },
