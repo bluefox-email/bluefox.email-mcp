@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { textResult } from '../helpers/errors.js'
 import { feedsSchema } from './feedsSchema.js'
 import { formatEmailDetail } from './emailLifecycle.js'
+import { CONTACT_MERGE_TAGS } from './mergeTags.js'
 
 export function createTransactionalEmailTools ({ client, resolveIdOrRequired, resolveIdOptional }) {
   return [
@@ -13,7 +14,7 @@ export function createTransactionalEmailTools ({ client, resolveIdOrRequired, re
         inputSchema: {
           name: z.string().describe('Internal name.'),
           subject: z.string(),
-          body: z.string().describe('Email body as a Handlebars template string. Supports {{contact.email}}/{{contact.<customField>}} merge tags, plus any key later passed as `data` when sending (available at the top level, e.g. sending data:{orderId:123} makes {{orderId}} available - not {{data.orderId}}). unsubscribeLink/pauseSubscriptionLink are NOT available on transactional emails. If this email will be used as a double opt-in confirmation email (see create_subscriber_list/create_signup_form), the body MUST include {{verifyLink}} somewhere - that\'s the only way a contact can confirm their subscription. This tool cannot author bluefox.email\'s visual (Chamaileon) editor format or start from a saved template - content is always sent as plain html/text.'),
+          body: z.string().describe(`Email body as a Handlebars template string. Supports any key later passed as \`data\` when sending (available at the top level, e.g. sending data:{orderId:123} makes {{orderId}} available - not {{data.orderId}}). unsubscribeLink/pauseSubscriptionLink are NOT available on transactional emails. If this email will be used as a double opt-in confirmation email (see create_subscriber_list/create_signup_form), the body MUST include {{verifyLink}} somewhere - that's the only way a contact can confirm their subscription. This tool cannot author bluefox.email's visual (Chamaileon) editor format or start from a saved template - content is always sent as plain html/text. ${CONTACT_MERGE_TAGS}`),
           bodyType: z.enum(['html', 'text']).optional().describe('Defaults to "text" if omitted.'),
           previewText: z.string().optional().describe('Inbox preview text - ask the user for this if not given, it meaningfully affects open rates.'),
           senderIdentityId: z.string().optional(),

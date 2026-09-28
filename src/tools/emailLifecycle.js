@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { textResult } from '../helpers/errors.js'
 import { normalizeScheduledFor } from '../helpers/scheduledFor.js'
 import { feedsSchema } from './feedsSchema.js'
+import { CONTACT_MERGE_TAGS } from './mergeTags.js'
 
 const RESOURCE_PATH = {
   campaign: '/campaigns',
@@ -83,7 +84,7 @@ export function createEmailLifecycleTools ({ client, resolveId, resolveIdOptiona
           emailName: z.string().optional().describe('The email to update, by its current name - looked up automatically. Provide this if you do not already have the id.'),
           newName: z.string().optional(),
           subject: z.string().optional(),
-          body: z.string().optional().describe('Replaces the email body (a Handlebars template string).'),
+          body: z.string().optional().describe(`Replaces the email body (a Handlebars template string). ${CONTACT_MERGE_TAGS}`),
           bodyType: z.enum(['html', 'text']).optional().describe('Switches the body between plain html/text authoring. Omit to keep using the visual (Chamaileon) editor document - only set this alongside body when authoring as html/text.'),
           previewText: z.string().optional(),
           senderIdentityId: z.string().optional(),
