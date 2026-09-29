@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { formatAutomationDetail, formatAutomationSummaryLine, formatTrigger, formatExitCriteria } from './automationFormat.js'
+import { formatAutomationDetail, formatAutomationSummaryLine, formatTrigger, formatExitCriteria, listSteps } from './automationFormat.js'
 
 describe('formatTrigger', () => {
   test('reports when no trigger is configured', () => {
@@ -106,6 +106,7 @@ describe('formatAutomationDetail', () => {
         { _id: 'n1', type: 'delay', duration: 2, durationType: 'day' },
         { _id: 'n2', type: 'delay', durationType: 'wait-until-time', waitUntilTime: '08:00' },
         { _id: 'n3', type: 'delay', durationType: 'wait-until-day', waitUntilDay: 'monday' },
+        { _id: 'n3b', type: 'delay', durationType: 'wait-until-day', waitUntilDay: ['monday', 'thursday'], waitUntilTime: '09:00' },
         { _id: 'n4', type: 'delay', durationType: 'wait-until-weekday' },
         { _id: 'n4b', type: 'delay', durationType: 'wait-until-weekday', waitUntilTime: '08:00' },
         { _id: 'n5', type: 'send-email', emailId: 'email1' },
@@ -144,6 +145,7 @@ describe('formatAutomationDetail', () => {
     expect(text).toContain('Wait 2 day(s)')
     expect(text).toContain('Wait until 08:00')
     expect(text).toContain('Wait until monday')
+    expect(text).toContain('Wait until monday or thursday 09:00')
     expect(text).toContain('Wait until the next weekday')
     expect(text).toContain('Wait until the next weekday at 08:00')
     expect(text).toContain('Send email (emailId email1)')
@@ -213,5 +215,26 @@ describe('formatAutomationDetail - staged send-email content on an active automa
 describe('formatAutomationSummaryLine', () => {
   test('formats a name/id/status one-liner', () => {
     expect(formatAutomationSummaryLine({ name: 'Welcome flow', _id: 'auto1', status: 'active' })).toBe('"Welcome flow" (id auto1) - active')
+  })
+})
+
+describe('listSteps', () => {
+  test('labels nested steps by position and tolerates missing branches/days', () => {
+    const steps = listSteps([
+      { _id: 'n1', type: 'delay', durationType: 'wait-until-day' },
+      { _id: 'b1', type: 'branch' },
+      { _id: 'b2', type: 'branch', branches: [{ _id: 'arm1', sequence: [{ _id: 'n2', type: 'complete' }] }] }
+    ])
+
+    expect(steps.map(step => step.label)).toEqual([
+      'Step 1: Wait until',
+      'Step 2: Branch',
+      'Step 3: Branch',
+      'Step 3 > Branch 1 > Step 1: End automation'
+    ])
+  })
+
+  test('returns nothing for a missing sequence', () => {
+    expect(listSteps(undefined)).toEqual([])
   })
 })

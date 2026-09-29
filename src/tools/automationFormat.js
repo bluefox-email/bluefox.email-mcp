@@ -65,7 +65,7 @@ function formatNodeSummary (node) {
         return `Wait until ${node.waitUntilTime}`
       }
       if (node.durationType === 'wait-until-day') {
-        return `Wait until ${node.waitUntilDay} ${node.waitUntilTime || ''}`.trim()
+        return `Wait until ${[].concat(node.waitUntilDay || []).join(' or ')} ${node.waitUntilTime || ''}`.trim()
       }
       if (node.durationType === 'wait-until-weekday') {
         return `Wait until the next weekday${node.waitUntilTime ? ` at ${node.waitUntilTime}` : ''}`
@@ -140,6 +140,23 @@ export function formatAutomationDetail (automation) {
   }
 
   return lines.join('\n')
+}
+
+// Flattens the tree into one entry per node with a readable position ("Step 2 > Branch 1 > Step 1: Wait 2 day(s)"),
+// so per-step counts and per-email stats can name the step instead of printing a bare node id.
+export function listSteps (sequence, prefix = '', steps = []) {
+  (sequence || []).forEach((node, index) => {
+    const position = `${prefix}Step ${index + 1}`
+    steps.push({ node, label: `${position}: ${formatNodeSummary(node).replace(/:$/, '')}` })
+    if (node.type === 'branch') {
+      (node.branches || []).forEach((branch, branchIndex) => listSteps(branch.sequence, `${position} > Branch ${branchIndex + 1} > `, steps))
+    }
+  })
+  return steps
+}
+
+export function formatEmailStats (stats) {
+  return `${stats.sent} sent, ${stats.failed || 0} failed, ${stats.opens} opens (${stats.uniqueOpens} unique), ${stats.clicks} clicks (${stats.uniqueClicks} unique), ${stats.bounce} bounced, ${stats.complaint} complaints`
 }
 
 export function formatAutomationSummaryLine (automation) {
