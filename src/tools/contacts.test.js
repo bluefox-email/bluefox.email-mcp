@@ -1,10 +1,12 @@
 import { describe, expect, test } from 'vitest'
 import { createContactTools } from './contacts.js'
 import { createFakeClient } from '../helpers/fakeClient.js'
+import { createResolveId } from '../helpers/resolveId.js'
 
 function setup () {
   const client = createFakeClient()
-  const tools = createContactTools({ client })
+  const { resolveIdOptional } = createResolveId(client)
+  const tools = createContactTools({ client, resolveIdOptional })
   const byName = Object.fromEntries(tools.map(tool => [tool.name, tool]))
   return { client, ...byName }
 }
@@ -151,5 +153,143 @@ describe('delete_contact', () => {
 
     expect(client.del).toHaveBeenCalledWith('/contacts/a%40example.com')
     expect(result.content[0].text).toBe('Deleted contact a@example.com.')
+  })
+})
+
+describe('list_contacts', () => {
+  test('lists everyone with no filters, using the default page size', async () => {
+    const { client, list_contacts: listContacts } = setup()
+    client.get.mockResolvedValue({ count: 1, items: [{ email: 'a@example.com', tags: [] }] })
+
+    const result = await listContacts.handler({})
+
+    expect(client.get).toHaveBeenCalledWith('/contacts', { filter: { subscriberListId: undefined, subscriberStatus: undefined, segmentId: undefined, segment: undefined }, limit: 50, skip: 0 })
+    expect(result.content[0].text).toBe('Filters: none (all contacts).\n1 contact(s) match. Showing 1-1:\na@example.com - tags: none')
+  })
+
+  test('filters by a segment name, resolving it to an id first and echoing its rule', async () => {
+    const { client, list_contacts: listContacts } = setup()
+    const segment = {
+      name: 'Pro users',
+      groups: [
+        { conditions: [{ property: 'plan', operator: 'equals', value: 'batch-b' }, { operator: 'has-tag', value: 'vip' }] },
+        { conditions: [] }
+      ]
+    }
+    client.get
+      .mockResolvedValueOnce({ items: [{ _id: 'seg1' }] })
+      .mockResolvedValueOnce(segment)
+      .mockResolvedValueOnce({ count: 1, items: [{ email: 'a@example.com', name: 'Ada', tags: ['vip'], plan: 'pro' }] })
+
+    const result = await listContacts.handler({ segmentName: 'Pro users' })
+
+    expect(client.get).toHaveBeenNthCalledWith(1, '/segments', { filter: { name: 'Pro users' }, limit: 2 })
+    expect(client.get).toHaveBeenNthCalledWith(2, '/segments/seg1')
+    expect(client.get).toHaveBeenNthCalledWith(3, '/contacts', { filter: { subscriberListId: undefined, subscriberStatus: undefined, segmentId: 'seg1', segment: undefined }, limit: 50, skip: 0 })
+    expect(result.content[0].text).toBe('Filters: segment "Pro users" [plan equals "batch-b" AND has-tag "vip" OR everyone].\n1 contact(s) match. Showing 1-1:\na@example.com (Ada) - tags: vip - plan: pro')
+  })
+
+  test('says when a saved segment has no groups', async () => {
+    const { client, list_contacts: listContacts } = setup()
+    client.get
+      .mockResolvedValueOnce({ name: 'Empty', groups: [] })
+      .mockResolvedValueOnce({ count: 0, items: [] })
+
+    const result = await listContacts.handler({ segmentId: 'seg1' })
+
+    expect(result.content[0].text).toBe('Filters: segment "Empty" [no groups - matches nobody].\nNo contacts match.')
+  })
+
+  test('fails clearly for an unknown segment name', async () => {
+    const { client, list_contacts: listContacts } = setup()
+    client.get.mockResolvedValue({ items: [] })
+
+    await expect(listContacts.handler({ segmentName: 'Nope' })).rejects.toThrow('No segment named "Nope" found.')
+    expect(client.get).toHaveBeenCalledTimes(1)
+  })
+
+  test('filters by tags and field values as AND-ed conditions, alongside a segment id', async () => {
+    const { client, list_contacts: listContacts } = setup()
+    client.get
+      .mockResolvedValueOnce({ name: 'VIP', groups: [{ conditions: [{ operator: 'has-tag', value: 'vip' }] }] })
+      .mockResolvedValueOnce({ count: 0, items: [] })
+
+    const result = await listContacts.handler({ segmentId: 'seg1', tags: ['vip', 'beta'], fields: { plan: 'pro', seats: 5 } })
+
+    const conditions = [
+      { operator: 'has-tag', value: 'vip' },
+      { operator: 'has-tag', value: 'beta' },
+      { property: 'plan', operator: 'equals', value: 'pro' },
+      { property: 'seats', operator: 'equals', value: 5 }
+    ]
+    expect(client.get).toHaveBeenCalledWith('/contacts', { filter: { subscriberListId: undefined, subscriberStatus: undefined, segmentId: 'seg1', segment: JSON.stringify({ groups: [{ conditions }] }) }, limit: 50, skip: 0 })
+    expect(result.content[0].text).toBe('Filters: segment "VIP" [has-tag "vip"]; tags: vip, beta; fields: plan = "pro", seats = 5.\nNo contacts match.')
+  })
+
+  test('reports no matches', async () => {
+    const { client, list_contacts: listContacts } = setup()
+    client.get.mockResolvedValue({ count: 0, items: [] })
+
+    const result = await listContacts.handler({ tags: ['vip'] })
+
+    expect(result.content[0].text).toBe('Filters: tags: vip.\nNo contacts match.')
+  })
+
+  test('points to the next page when more contacts match', async () => {
+    const { client, list_contacts: listContacts } = setup()
+    client.get.mockResolvedValue({ count: 5, items: [{ email: 'c@example.com' }, { email: 'd@example.com' }] })
+
+    const result = await listContacts.handler({ tags: ['vip'], limit: 2, skip: 2 })
+
+    expect(client.get).toHaveBeenCalledWith('/contacts', expect.objectContaining({ limit: 2, skip: 2 }))
+    expect(result.content[0].text).toBe('Filters: tags: vip.\n5 contact(s) match. Showing 3-4:\nc@example.com - tags: none\nd@example.com - tags: none\nPass skip: 4 for the next page.')
+  })
+
+  test('filters by a subscriber list name and status', async () => {
+    const { client, list_contacts: listContacts } = setup()
+    client.get
+      .mockResolvedValueOnce({ items: [{ _id: 'list1' }] })
+      .mockResolvedValueOnce({ count: 1, items: [{ email: 'a@example.com' }] })
+
+    const result = await listContacts.handler({ subscriberListName: 'Newsletter', subscriberStatus: 'active', tags: ['vip'] })
+
+    expect(client.get).toHaveBeenNthCalledWith(1, '/subscriber-lists', { filter: { name: 'Newsletter' }, limit: 2 })
+    expect(client.get).toHaveBeenNthCalledWith(2, '/contacts', {
+      filter: { subscriberListId: 'list1', subscriberStatus: 'active', segmentId: undefined, segment: JSON.stringify({ groups: [{ conditions: [{ operator: 'has-tag', value: 'vip' }] }] }) },
+      limit: 50,
+      skip: 0
+    })
+    expect(result.content[0].text).toBe('Filters: subscriber list "Newsletter" (status: active); tags: vip.\n1 contact(s) match. Showing 1-1:\na@example.com - tags: none')
+  })
+
+  test('answers "who on list 2 matches segment X", naming a list given by id', async () => {
+    const { client, list_contacts: listContacts } = setup()
+    client.get
+      .mockResolvedValueOnce({ items: [{ _id: 'seg1' }] })
+      .mockResolvedValueOnce({ name: 'X', groups: [{ conditions: [{ property: 'batch', operator: 'equals', value: 'batch-b' }] }] })
+      .mockResolvedValueOnce({ count: 0, items: [] })
+
+    const result = await listContacts.handler({ subscriberListId: 'list2', segmentName: 'X' })
+
+    expect(client.get).toHaveBeenNthCalledWith(3, '/contacts', { filter: { subscriberListId: 'list2', subscriberStatus: undefined, segmentId: 'seg1', segment: undefined }, limit: 50, skip: 0 })
+    expect(result.content[0].text).toBe('Filters: subscriber list id list2 (any status); segment "X" [batch equals "batch-b"].\nNo contacts match.')
+  })
+
+  test('refuses a subscriber status without a subscriber list', async () => {
+    const { client, list_contacts: listContacts } = setup()
+
+    const result = await listContacts.handler({ subscriberStatus: 'active' })
+
+    expect(client.get).not.toHaveBeenCalled()
+    expect(result.content[0].text).toBe('subscriberStatus needs a subscriber list (subscriberListId or subscriberListName).')
+  })
+
+  test('says so when skip is past the end', async () => {
+    const { client, list_contacts: listContacts } = setup()
+    client.get.mockResolvedValue({ count: 3, items: [] })
+
+    const result = await listContacts.handler({ skip: 10 })
+
+    expect(result.content[0].text).toBe('Filters: none (all contacts).\n3 contact(s) match, but skip 10 is past the end.')
   })
 })

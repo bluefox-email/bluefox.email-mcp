@@ -1,6 +1,6 @@
 {
   "name": "bluefox.email-mcp",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Local MCP server wrapping the bluefox.email public API as tools for AI agents (Claude Desktop, Claude Code).",
   "type": "module",
   "bin": {
