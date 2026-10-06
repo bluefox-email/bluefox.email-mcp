@@ -3,6 +3,7 @@ import { textResult } from '../helpers/errors.js'
 import { feedsSchema } from './feedsSchema.js'
 import { formatEmailDetail } from './emailLifecycle.js'
 import { CONTACT_MERGE_TAGS } from './mergeTags.js'
+import { chamaileonInputSchema, resolveCreateContent } from '../helpers/chamaileonDocument.js'
 
 export function createTransactionalEmailTools ({ client, resolveIdOrRequired, resolveIdOptional }) {
   return [
@@ -14,8 +15,9 @@ export function createTransactionalEmailTools ({ client, resolveIdOrRequired, re
         inputSchema: {
           name: z.string().describe('Internal name.'),
           subject: z.string(),
-          body: z.string().describe(`Email body as a Handlebars template string. Supports any key later passed as \`data\` when sending (available at the top level, e.g. sending data:{orderId:123} makes {{orderId}} available - not {{data.orderId}}). unsubscribeLink/pauseSubscriptionLink are NOT available on transactional emails. If this email will be used as a double opt-in confirmation email (see create_subscriber_list/create_signup_form), the body MUST include {{verifyLink}} somewhere - that's the only way a contact can confirm their subscription. This tool cannot author bluefox.email's visual (Chamaileon) editor format or start from a saved template - content is always sent as plain html/text. ${CONTACT_MERGE_TAGS}`),
-          bodyType: z.enum(['html', 'text']).optional().describe('Defaults to "text" if omitted.'),
+          body: z.string().optional().describe(`Email body as a Handlebars template string. Supports any key later passed as \`data\` when sending (available at the top level, e.g. sending data:{orderId:123} makes {{orderId}} available - not {{data.orderId}}). unsubscribeLink/pauseSubscriptionLink are NOT available on transactional emails. If this email will be used as a double opt-in confirmation email (see create_subscriber_list/create_signup_form), the body MUST include {{verifyLink}} somewhere - that's the only way a contact can confirm their subscription. Required unless a Chamaileon JSON is given instead (chamaileonJsonPath/chamaileonJson). This tool cannot start from a saved template. ${CONTACT_MERGE_TAGS}`),
+          bodyType: z.enum(['html', 'text']).optional().describe('Defaults to "text" if omitted. Not used with a Chamaileon JSON.'),
+          ...chamaileonInputSchema,
           previewText: z.string().optional().describe('Inbox preview text - ask the user for this if not given, it meaningfully affects open rates.'),
           senderIdentityId: z.string().optional(),
           senderIdentityEmail: z.string().optional().describe('The sender identity to send from, by its email address - looked up automatically.'),
@@ -35,8 +37,7 @@ export function createTransactionalEmailTools ({ client, resolveIdOrRequired, re
         const body = {
           name: args.name,
           subject: args.subject,
-          type: args.bodyType || 'text',
-          document: args.body
+          ...await resolveCreateContent(args)
         }
         if (args.previewText) {
           body.previewText = args.previewText

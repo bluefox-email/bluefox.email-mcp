@@ -149,3 +149,27 @@ describe('manage_templates', () => {
     expect(result.content[0].text).toBe('Deleted the template.')
   })
 })
+
+describe('manage_templates with a Chamaileon JSON', () => {
+  const chamaileonJson = JSON.stringify({ body: { children: [] } })
+
+  test('create uploads it instead of copying a source template', async () => {
+    const { client, manageTemplates } = setup()
+    client.post.mockResolvedValue({ _id: 'tmpl123', name: 'Imported', subject: 'Hello' })
+
+    const result = await manageTemplates.handler({ action: 'create', name: 'Imported', subject: 'Hello', chamaileonJson })
+
+    expect(client.get).not.toHaveBeenCalled()
+    expect(client.post).toHaveBeenCalledWith('/templates', { name: 'Imported', subject: 'Hello', document: { body: { children: [] } } })
+    expect(result.content[0].text).toContain('Created template (from the uploaded Chamaileon JSON):')
+  })
+
+  test('update replaces the template\'s visual content', async () => {
+    const { client, manageTemplates } = setup()
+    client.patch.mockResolvedValue({ _id: 'tmpl123', name: 'Welcome', subject: 'Hello' })
+
+    await manageTemplates.handler({ action: 'update', templateId: 'tmpl123', chamaileonJson })
+
+    expect(client.patch).toHaveBeenCalledWith('/templates/tmpl123', { document: { body: { children: [] } } })
+  })
+})

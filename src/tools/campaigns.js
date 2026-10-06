@@ -4,6 +4,7 @@ import { normalizeScheduledFor } from '../helpers/scheduledFor.js'
 import { feedsSchema } from './feedsSchema.js'
 import { formatEmailDetail } from './emailLifecycle.js'
 import { CONTACT_MERGE_TAGS } from './mergeTags.js'
+import { chamaileonInputSchema, resolveCreateContent } from '../helpers/chamaileonDocument.js'
 
 export function createCampaignTools ({ client, resolveIdOrRequired, resolveIdOptional }) {
   return [
@@ -15,8 +16,9 @@ export function createCampaignTools ({ client, resolveIdOrRequired, resolveIdOpt
         inputSchema: {
           name: z.string().describe('Internal campaign name - not shown to recipients.'),
           subject: z.string().describe('Email subject line.'),
-          body: z.string().describe(`Email body as a Handlebars template string - supports {{unsubscribeLink}} and feed loops. This tool cannot author bluefox.email's visual (Chamaileon) editor format or start from a saved template - content is always sent as plain html/text. ${CONTACT_MERGE_TAGS}`),
-          bodyType: z.enum(['html', 'text']).optional().describe('Defaults to "text" if omitted.'),
+          body: z.string().optional().describe(`Email body as a Handlebars template string - supports {{unsubscribeLink}} and feed loops. Required unless a Chamaileon JSON is given instead (chamaileonJsonPath/chamaileonJson). This tool cannot start from a saved template. ${CONTACT_MERGE_TAGS}`),
+          bodyType: z.enum(['html', 'text']).optional().describe('Defaults to "text" if omitted. Not used with a Chamaileon JSON.'),
+          ...chamaileonInputSchema,
           subscriberListId: z.string().optional().describe('The subscriber list to send to, by id.'),
           subscriberListName: z.string().optional().describe('The subscriber list to send to, by name - looked up automatically. Provide this if you do not already have the id.'),
           segmentId: z.string().optional().describe('Optional - narrows the subscriber list down further, by id.'),
@@ -59,8 +61,7 @@ export function createCampaignTools ({ client, resolveIdOrRequired, resolveIdOpt
           subject: args.subject,
           timeZone: args.timeZone || 'UTC',
           subscriberListId,
-          type: args.bodyType || 'text',
-          document: args.body
+          ...await resolveCreateContent(args)
         }
         if (segmentId) {
           body.segmentId = segmentId

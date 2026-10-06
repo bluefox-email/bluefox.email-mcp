@@ -3,6 +3,7 @@ import { textResult } from '../helpers/errors.js'
 import { feedsSchema } from './feedsSchema.js'
 import { formatEmailDetail } from './emailLifecycle.js'
 import { CONTACT_MERGE_TAGS } from './mergeTags.js'
+import { chamaileonInputSchema, resolveCreateContent } from '../helpers/chamaileonDocument.js'
 
 export function createTriggeredEmailTools ({ client, resolveIdOrRequired, resolveIdOptional }) {
   return [
@@ -14,8 +15,9 @@ export function createTriggeredEmailTools ({ client, resolveIdOrRequired, resolv
         inputSchema: {
           name: z.string().describe('Internal name.'),
           subject: z.string(),
-          body: z.string().describe(`Email body as a Handlebars template string - supports {{unsubscribeLink}} and feed loops. This tool cannot author bluefox.email's visual (Chamaileon) editor format or start from a saved template - content is always sent as plain html/text. ${CONTACT_MERGE_TAGS}`),
-          bodyType: z.enum(['html', 'text']).optional().describe('Defaults to "text" if omitted.'),
+          body: z.string().optional().describe(`Email body as a Handlebars template string - supports {{unsubscribeLink}} and feed loops. Required unless a Chamaileon JSON is given instead (chamaileonJsonPath/chamaileonJson). This tool cannot start from a saved template. ${CONTACT_MERGE_TAGS}`),
+          bodyType: z.enum(['html', 'text']).optional().describe('Defaults to "text" if omitted. Not used with a Chamaileon JSON.'),
+          ...chamaileonInputSchema,
           subscriberListId: z.string().optional(),
           subscriberListName: z.string().optional().describe('The subscriber list this triggered email is for, by name - looked up automatically. Provide this if you do not already have the id.'),
           previewText: z.string().optional().describe('Inbox preview text - ask the user for this if not given, it meaningfully affects open rates.'),
@@ -46,8 +48,7 @@ export function createTriggeredEmailTools ({ client, resolveIdOrRequired, resolv
           name: args.name,
           subject: args.subject,
           subscriberListId,
-          type: args.bodyType || 'text',
-          document: args.body
+          ...await resolveCreateContent(args)
         }
         if (args.previewText) {
           body.previewText = args.previewText

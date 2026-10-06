@@ -111,3 +111,16 @@ describe('send_transactional_email', () => {
     })
   })
 })
+
+describe('create_transactional_email with a Chamaileon JSON', () => {
+  const chamaileonJson = JSON.stringify({ body: { children: [] } })
+
+  test('uploads it as the visual editor document', async () => {
+    const { client, create_transactional_email: createTransactionalEmail } = setup()
+    client.post.mockResolvedValue({ _id: 'email123', name: 'Order Confirmation', subject: 'Your order' })
+
+    await createTransactionalEmail.handler({ name: 'Order Confirmation', subject: 'Your order', chamaileonJson })
+
+    expect(client.post).toHaveBeenCalledWith('/transactional-emails', { name: 'Order Confirmation', subject: 'Your order', document: { body: { children: [] } } })
+  })
+})
