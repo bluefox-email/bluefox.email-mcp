@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Tool names and input schemas are the public API: removing/renaming a tool or param,
 or making a param required, is a breaking change.
 
+## [0.2.1] - 2026-10-06
+
+### Changed
+- `create_campaign` and `update_email`: the `body` description documents the `{{webVersionLink}}` merge tag ("view in browser" link, campaigns only, works once the campaign is sent or archived, always shows the latest version of the campaign).
+
 ## [0.2.0] - 2026-10-02
 
 ### Added
@@ -20,5 +25,6 @@ First versioned release. Changes before this version are not tracked here.
 ### Added
 - `list_contacts`: list and filter contacts by subscriber list, saved segment (name or id), tags and contact fields.
 
+[0.2.1]: https://github.com/bluefox-email/bluefox.email-mcp/releases/tag/v0.2.1
 [0.2.0]: https://github.com/bluefox-email/bluefox.email-mcp/releases/tag/v0.2.0
 [0.1.0]: https://github.com/bluefox-email/bluefox.email-mcp/releases/tag/v0.1.0
