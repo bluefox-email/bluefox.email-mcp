@@ -6,7 +6,8 @@ account directly - creating campaigns, sending emails, managing contacts and sub
 you asking in plain language. No API docs, no writing code, no copy-pasting HTTP requests.
 
 It runs on your own computer (not hosted anywhere), and only talks to `bluefox.email` using your own API key.
-It is not published to npm - you run it from this folder.
+It's published on npm as [`bluefox.email-mcp`](https://www.npmjs.com/package/bluefox.email-mcp), so your AI agent
+can run it with `npx` and you don't need to install anything first.
 
 ## What it can do
 
@@ -22,19 +23,10 @@ See the full list of what's supported in [Tools](#tools) below.
 
 ## Setup
 
-### 1. Install
+### 1. Install Node.js
 
-```bash
-git clone https://github.com/bluefox-email/bluefox.email-mcp
-cd bluefox.email-mcp
-npm install
-npm link
-```
-
-`npm link` makes the `bluefox.email-mcp` command available on your computer, pointing at this folder. That's what
-lets your AI agent launch it (step 3 below).
-
-Requires Node.js 20 or later.
+You need Node.js 20 or later. Your AI agent downloads and runs the server itself with `npx` (step 3 below), so you
+don't install anything else.
 
 ### 2. Get your credentials
 
@@ -53,7 +45,8 @@ Most MCP clients use the same config shape - a `command` to run plus the three e
 {
   "mcpServers": {
     "bluefox-email": {
-      "command": "bluefox.email-mcp",
+      "command": "npx",
+      "args": ["-y", "bluefox.email-mcp@latest"],
       "env": {
         "BLUEFOX_BASE_URL": "https://api.bluefox.email",
         "BLUEFOX_PROJECT_ID": "YOUR_PROJECT_ID",
@@ -64,14 +57,15 @@ Most MCP clients use the same config shape - a `command` to run plus the three e
 }
 ```
 
-**Windows:** `npm link` creates a `.cmd` shim, and most MCP clients launch the server without a shell - which
-fails silently (`spawn UNKNOWN`) for a bare command name on Windows. Use this `command`/`args` shape instead,
-everything else the same - note the explicit `.cmd` extension, which `cmd /c` needs here (unlike typing the
-same command at an interactive prompt):
+`@latest` makes your agent pick up new versions when it restarts. To stay on one version, pin it instead (for
+example `bluefox.email-mcp@0.2.0`).
+
+**Windows:** `npx` is a `.cmd` shim on Windows, and most MCP clients launch the server without a shell. That fails
+silently (`spawn UNKNOWN`). Use this `command`/`args` shape instead and keep everything else the same:
 
 ```json
 "command": "cmd",
-"args": ["/c", "bluefox.email-mcp.cmd"],
+"args": ["/c", "npx", "-y", "bluefox.email-mcp@latest"],
 ```
 
 Where that block goes, per client:
@@ -90,10 +84,10 @@ claude mcp add bluefox-email \
   --env BLUEFOX_BASE_URL=https://api.bluefox.email \
   --env BLUEFOX_PROJECT_ID=YOUR_PROJECT_ID \
   --env BLUEFOX_API_KEY=YOUR_API_KEY \
-  -- bluefox.email-mcp
+  -- npx -y bluefox.email-mcp@latest
 ```
 
-**Windows:** replace the last line with `-- cmd /c bluefox.email-mcp.cmd` (see the Windows note above).
+**Windows:** replace the last line with `-- cmd /c npx -y bluefox.email-mcp@latest` (see the Windows note above).
 
 **Codex CLI** also uses a single command instead of a config file:
 
@@ -102,10 +96,10 @@ codex mcp add bluefox-email \
   --env BLUEFOX_BASE_URL=https://api.bluefox.email \
   --env BLUEFOX_PROJECT_ID=YOUR_PROJECT_ID \
   --env BLUEFOX_API_KEY=YOUR_API_KEY \
-  -- bluefox.email-mcp
+  -- npx -y bluefox.email-mcp@latest
 ```
 
-**Windows:** replace the last line with `-- cmd /c bluefox.email-mcp.cmd` (see the Windows note above).
+**Windows:** replace the last line with `-- cmd /c npx -y bluefox.email-mcp@latest` (see the Windows note above).
 
 **ChatGPT (the web/app chat product)**: as of now, ChatGPT's MCP support (Settings > Connectors) expects a server
 reachable at a URL, not a local command - so this local server can't be connected from ChatGPT directly. This is
@@ -116,7 +110,15 @@ Settings > Integrations page in the app).
 Once connected, start a new chat and ask it to do something with your bluefox.email project.
 
 <details>
-<summary>Didn't use <code>npm link</code>? Use this config instead</summary>
+<summary>Running from a local clone instead (development)</summary>
+
+```bash
+git clone https://github.com/bluefox-email/bluefox.email-mcp
+cd bluefox.email-mcp
+npm install
+```
+
+Then point your client at the local entry file:
 
 ```json
 {

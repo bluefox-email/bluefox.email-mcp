@@ -7,6 +7,24 @@
     "bluefox.email-mcp": "./src/index.js"
   },
   "main": "src/index.js",
+  "files": [
+    "src/**/*.js",
+    "!src/**/*.test.js",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "bluefox.email",
+    "email",
+    "claude"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "start": "node src/index.js",
     "lint": "npx standard",
@@ -22,7 +40,8 @@
     "standard": "^17.1.0",
     "vitest": "^1.6.0"
   },
-  "license": "UNLICENSED",
+  "author": "GYN",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/gyulanemeth/bluefox.email-mcp.git"
