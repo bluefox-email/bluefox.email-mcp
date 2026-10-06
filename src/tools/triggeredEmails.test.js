@@ -127,3 +127,16 @@ describe('send_triggered_email', () => {
     expect(result.content[0].text).toBe('Sent the triggered email to its subscriber list.')
   })
 })
+
+describe('create_triggered_email with a Chamaileon JSON', () => {
+  const chamaileonJson = JSON.stringify({ body: { children: [] } })
+
+  test('uploads it as the visual editor document', async () => {
+    const { client, create_triggered_email: createTriggeredEmail } = setup()
+    client.post.mockResolvedValue({ _id: 'email123', name: 'Welcome', subject: 'Hi', subscriberListId: 'list123' })
+
+    await createTriggeredEmail.handler({ name: 'Welcome', subject: 'Hi', chamaileonJson, subscriberListId: 'list123' })
+
+    expect(client.post).toHaveBeenCalledWith('/triggered-emails', { name: 'Welcome', subject: 'Hi', subscriberListId: 'list123', document: { body: { children: [] } } })
+  })
+})

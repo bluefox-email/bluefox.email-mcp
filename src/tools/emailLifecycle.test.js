@@ -496,3 +496,17 @@ describe('list_email_error_log', () => {
     expect(result.content[0].text).toContain('2026-08-01T11:00:00.000Z [delivery] a@example.com Delivery Failure: SES: rejected')
   })
 })
+
+describe('update_email with a Chamaileon JSON', () => {
+  const chamaileonJson = JSON.stringify({ body: { children: [] } })
+
+  test('replaces the body with the visual editor document, switching type back to chamaileon', async () => {
+    const { client, update_email: updateEmail } = setup()
+    client.patch.mockResolvedValue({ _id: 'email123', name: 'Welcome', subject: 'Hi', type: 'chamaileon', document: { body: { children: [] } } })
+
+    const result = await updateEmail.handler({ type: 'transactional', emailId: 'email123', chamaileonJson })
+
+    expect(client.patch).toHaveBeenCalledWith('/transactional-emails/email123', { type: 'chamaileon', document: { body: { children: [] } } })
+    expect(result.content[0].text).toContain('Body: visual editor (Chamaileon) document')
+  })
+})

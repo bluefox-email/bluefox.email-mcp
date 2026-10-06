@@ -645,6 +645,15 @@ describe('manage_automation_email_content', () => {
     expect(result.content[0].text).toContain('Staged the email content change (not live until merged)')
   })
 
+  test('update uploads a Chamaileon JSON as the visual editor document', async () => {
+    const { client, byName } = setup()
+    client.patch.mockResolvedValue({ _id: 'email1', automationId: 'auto1', subject: 'Welcome' })
+
+    await byName.manage_automation_email_content.handler({ action: 'update', automationId: 'auto1', emailId: 'email1', chamaileonJson: JSON.stringify({ body: { children: [] } }), confirm: true })
+
+    expect(client.patch).toHaveBeenCalledWith('/automations/auto1/email/email1', { type: 'chamaileon', document: { body: { children: [] } } })
+  })
+
   test('update omits fields that were not given', async () => {
     const { client, byName } = setup()
     client.patch.mockResolvedValue({ _id: 'email1', automationId: 'auto1', subject: 'Welcome' })

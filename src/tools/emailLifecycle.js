@@ -3,6 +3,7 @@ import { textResult } from '../helpers/errors.js'
 import { normalizeScheduledFor } from '../helpers/scheduledFor.js'
 import { feedsSchema } from './feedsSchema.js'
 import { CONTACT_MERGE_TAGS } from './mergeTags.js'
+import { chamaileonInputSchema, readChamaileonDocument } from '../helpers/chamaileonDocument.js'
 import { rangeInputSchema, timelineInputSchema, buildStatsQuery, formatTimeline } from './statsTimeline.js'
 
 const RESOURCE_PATH = {
@@ -87,6 +88,7 @@ export function createEmailLifecycleTools ({ client, resolveId, resolveIdOptiona
           subject: z.string().optional(),
           body: z.string().optional().describe(`Replaces the email body (a Handlebars template string). ${CONTACT_MERGE_TAGS}`),
           bodyType: z.enum(['html', 'text']).optional().describe('Switches the body between plain html/text authoring. Omit to keep using the visual (Chamaileon) editor document - only set this alongside body when authoring as html/text.'),
+          ...chamaileonInputSchema,
           previewText: z.string().optional(),
           senderIdentityId: z.string().optional(),
           senderIdentityEmail: z.string().optional().describe('Looked up automatically.'),
@@ -111,6 +113,11 @@ export function createEmailLifecycleTools ({ client, resolveId, resolveIdOptiona
         }
         if (args.subject) {
           body.subject = args.subject
+        }
+        const chamaileonDocument = await readChamaileonDocument(args)
+        if (chamaileonDocument) {
+          body.type = 'chamaileon'
+          body.document = chamaileonDocument
         }
         if (args.body) {
           body.document = args.body

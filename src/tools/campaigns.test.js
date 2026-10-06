@@ -135,3 +135,30 @@ describe('create_campaign', () => {
     })
   })
 })
+
+describe('create_campaign with a Chamaileon JSON', () => {
+  const chamaileonJson = JSON.stringify({ body: { children: [] } })
+
+  test('uploads it as the visual editor document, leaving type to the API default', async () => {
+    const { client, createCampaign } = setup()
+    client.post.mockResolvedValue({ _id: 'campaign123', name: 'Summer Sale', subject: 'Big discounts', status: 'draft', subscriberListId: 'list123' })
+
+    await createCampaign.handler({ name: 'Summer Sale', subject: 'Big discounts', chamaileonJson, subscriberListId: 'list123' })
+
+    expect(client.post).toHaveBeenCalledWith('/campaigns', {
+      name: 'Summer Sale',
+      subject: 'Big discounts',
+      timeZone: 'UTC',
+      subscriberListId: 'list123',
+      document: { body: { children: [] } }
+    })
+  })
+
+  test('rejects a campaign with neither body nor a Chamaileon JSON', async () => {
+    const { client, createCampaign } = setup()
+
+    await expect(createCampaign.handler({ name: 'Summer Sale', subject: 'Big discounts', subscriberListId: 'list123' }))
+      .rejects.toThrow('Provide the email content')
+    expect(client.post).not.toHaveBeenCalled()
+  })
+})
