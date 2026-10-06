@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { textResult } from '../helpers/errors.js'
 import { formatAutomationDetail, formatAutomationSummaryLine, formatTrigger, formatExitCriteria, listSteps, formatEmailStats } from './automationFormat.js'
+import { timelineInputSchema, buildStatsQuery, formatTimeline } from './statsTimeline.js'
 import { CONTACT_MERGE_TAGS } from './mergeTags.js'
 
 const NODE_TYPES = ['delay', 'send-email', 'filter-audience', 'branch', 'complete', 'set-value', 'notify', 'manage-tags', 'webhook', 'condition']
@@ -562,7 +563,7 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
       name: 'get_automation_stats',
       config: {
         title: 'Get automation stats',
-        description: 'Read-only. "overview": how many contacts have gone through the automation (active/completed/errored) plus sends/opens/clicks/bounces/complaints for each of its emails and in total. "email": the same stats for one email. "recipients": who received one email and whether they opened/clicked/bounced/unsubscribed. For which step contacts are at right now, use manage_automation_running_contacts.',
+        description: 'Read-only. "overview": how many contacts have gone through the automation (active/completed/errored) plus sends/opens/clicks/bounces/complaints for each of its emails and in total. "email": the same stats for one email, or with interval + metric an hourly/daily/weekly/monthly breakdown (the same data as the app\'s stats chart). "recipients": who received one email and whether they opened/clicked/bounced/unsubscribed. For which step contacts are at right now, use manage_automation_running_contacts.',
         inputSchema: {
           action: z.enum(['overview', 'email', 'recipients']),
           automationId: z.string().optional(),
@@ -570,6 +571,7 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           emailId: z.string().optional().describe('email/recipients, required - from the send-email/notify node\'s emailId, or from the overview.'),
           from: z.string().optional().describe('overview/email - only count email events on or after this date (ISO 8601). Contact counts are always all-time. Range max 366 days.'),
           to: z.string().optional().describe('overview/email - only count email events on or before this date (ISO 8601).'),
+          ...timelineInputSchema,
           email: z.string().optional().describe('recipients - filter to a single recipient email address.'),
           status: z.enum(['scheduled', 'being-sent', 'sent', 'failed']).optional().describe('recipients.'),
           opened: z.boolean().optional().describe('recipients - did/did not open this email.'),
@@ -617,6 +619,10 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
         }
 
         if (args.action === 'email') {
+          if (args.interval || args.metric) {
+            const timeline = await client.get(`/automations/${automationId}/email/${args.emailId}/stats`, buildStatsQuery(args))
+            return textResult(`emailId ${args.emailId} - ${formatTimeline(timeline)}`)
+          }
           const stats = await client.get(`/automations/${automationId}/email/${args.emailId}/stats`, range)
           return textResult(`Stats for emailId ${args.emailId}: ${formatEmailStats(stats)}`)
         }

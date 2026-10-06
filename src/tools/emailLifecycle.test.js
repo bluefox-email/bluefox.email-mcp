@@ -184,6 +184,21 @@ describe('get_email', () => {
     expect(result.content[0].text).toBe('5 transactional email(s): Order Confirmation (more not shown).')
   })
 
+  test('returns an hourly breakdown when an interval and metric are given', async () => {
+    const { client, get_email: getEmail } = setup()
+    client.get.mockImplementation(async path => {
+      if (path === '/campaigns/campaign123') {
+        return { _id: 'campaign123', name: 'Summer Sale', subject: 'Big discounts' }
+      }
+      return { interval: 'hourly', metric: 'opens', timeZone: 'UTC', from: '2026-10-01T00:00:00.000Z', to: '2026-10-01T23:59:59.999Z', buckets: [{ period: '2026-10-01 10:00', count: 12, rate: 4.5 }] }
+    })
+
+    const result = await getEmail.handler({ type: 'campaign', emailId: 'campaign123', interval: 'hourly', metric: 'opens', from: '2026-10-01', to: '2026-10-01' })
+
+    expect(client.get).toHaveBeenCalledWith('/campaigns/campaign123/stats', { from: '2026-10-01', to: '2026-10-01', interval: 'hourly', metric: 'opens', timeZone: undefined })
+    expect(result.content[0].text).toBe('"Summer Sale" (id campaign123) - hourly "opens" from 2026-10-01 to 2026-10-01 (UTC):\n2026-10-01 10:00: 12 (4.5% of sent)\nPeriods not listed had 0.')
+  })
+
   test('returns full detail and stats for a single campaign found by id', async () => {
     const { client, get_email: getEmail } = setup()
     client.get.mockImplementation(async path => {

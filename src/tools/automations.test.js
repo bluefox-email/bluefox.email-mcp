@@ -780,6 +780,16 @@ describe('get_automation_stats', () => {
     expect(result.content[0].text).toContain('emailId is required for "recipients"')
   })
 
+  test('email returns a per-interval breakdown when an interval and metric are given', async () => {
+    const { client, byName } = setup()
+    client.get.mockResolvedValue({ interval: 'daily', metric: 'unsubscribe', timeZone: 'UTC', from: '2026-09-01T00:00:00.000Z', to: '2026-09-30T23:59:59.999Z', buckets: [{ period: '2026-09-30', count: 2 }] })
+
+    const result = await byName.get_automation_stats.handler({ action: 'email', automationId: 'auto1', emailId: 'e1', interval: 'daily', metric: 'unsubscribe', from: '2026-09-01', to: '2026-09-30' })
+
+    expect(client.get).toHaveBeenCalledWith('/automations/auto1/email/e1/stats', { from: '2026-09-01', to: '2026-09-30', interval: 'daily', metric: 'unsubscribe', timeZone: undefined })
+    expect(result.content[0].text).toBe('emailId e1 - daily "unsubscribe" from 2026-09-01 to 2026-09-30 (UTC):\n2026-09-30: 2\nPeriods not listed had 0.')
+  })
+
   test('email returns the stats for one email', async () => {
     const { client, byName } = setup()
     client.get.mockResolvedValue({ ...zeroStats, sent: 3 })

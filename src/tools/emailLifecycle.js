@@ -3,6 +3,7 @@ import { textResult } from '../helpers/errors.js'
 import { normalizeScheduledFor } from '../helpers/scheduledFor.js'
 import { feedsSchema } from './feedsSchema.js'
 import { CONTACT_MERGE_TAGS } from './mergeTags.js'
+import { rangeInputSchema, timelineInputSchema, buildStatsQuery, formatTimeline } from './statsTimeline.js'
 
 const RESOURCE_PATH = {
   campaign: '/campaigns',
@@ -184,11 +185,13 @@ export function createEmailLifecycleTools ({ client, resolveId, resolveIdOptiona
       name: 'get_email',
       config: {
         title: 'Get email (campaign, transactional, or triggered)',
-        description: 'Looks up a campaign, transactional email, or triggered email by name (with its current stats), or lists every email of that type on the project if no name is given.',
+        description: 'Looks up a campaign, transactional email, or triggered email by name (with its current stats), or lists every email of that type on the project if no name is given. Pass from/to to limit the stats to a date range, or interval + metric for an hourly/daily/weekly/monthly breakdown (the same data as the app\'s stats chart).',
         inputSchema: {
           type: z.enum(['campaign', 'transactional', 'triggered']),
           emailId: z.string().optional(),
-          emailName: z.string().optional().describe('Omit both this and emailId to list every email of this type instead.')
+          emailName: z.string().optional().describe('Omit both this and emailId to list every email of this type instead.'),
+          ...rangeInputSchema,
+          ...timelineInputSchema
         }
       },
       handler: async (args) => {
@@ -206,8 +209,11 @@ export function createEmailLifecycleTools ({ client, resolveId, resolveIdOptiona
         const id = await resolveEmailId(args.type, { id: args.emailId, name: args.emailName })
         const [detail, stats] = await Promise.all([
           client.get(`${resourcePath}/${id}`),
-          client.get(`${resourcePath}/${id}/stats`)
+          client.get(`${resourcePath}/${id}/stats`, buildStatsQuery(args))
         ])
+        if (args.interval || args.metric) {
+          return textResult(`"${detail.name}" (id ${detail._id}) - ${formatTimeline(stats)}`)
+        }
         return textResult(formatEmailDetail(args.type, detail, stats))
       }
     },
