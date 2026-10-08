@@ -44,6 +44,6 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gyulanemeth/bluefox.email-mcp.git"
+    "url": "git+https://github.com/bluefox-email/bluefox.email-mcp.git"
   }
 }
