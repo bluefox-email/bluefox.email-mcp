@@ -6,7 +6,7 @@ account directly - creating campaigns, sending emails, managing contacts and sub
 you asking in plain language. No API docs, no writing code, no copy-pasting HTTP requests.
 
 It runs on your own computer (not hosted anywhere), and only talks to `bluefox.email` using your own API key.
-It's published on npm as [`bluefox.email-mcp`](https://www.npmjs.com/package/bluefox.email-mcp), so your AI agent
+It's published on npm as [`@bluefox-email/mcp`](https://www.npmjs.com/package/@bluefox-email/mcp), so your AI agent
 can run it with `npx` and you don't need to install anything first.
 
 ## What it can do
@@ -46,7 +46,7 @@ Most MCP clients use the same config shape - a `command` to run plus the three e
   "mcpServers": {
     "bluefox-email": {
       "command": "npx",
-      "args": ["-y", "bluefox.email-mcp@latest"],
+      "args": ["-y", "@bluefox-email/mcp@latest"],
       "env": {
         "BLUEFOX_BASE_URL": "https://api.bluefox.email",
         "BLUEFOX_PROJECT_ID": "YOUR_PROJECT_ID",
@@ -58,14 +58,14 @@ Most MCP clients use the same config shape - a `command` to run plus the three e
 ```
 
 `@latest` makes your agent pick up new versions when it restarts. To stay on one version, pin it instead (for
-example `bluefox.email-mcp@0.2.0`).
+example `@bluefox-email/mcp@0.2.0`).
 
 **Windows:** `npx` is a `.cmd` shim on Windows, and most MCP clients launch the server without a shell. That fails
 silently (`spawn UNKNOWN`). Use this `command`/`args` shape instead and keep everything else the same:
 
 ```json
 "command": "cmd",
-"args": ["/c", "npx", "-y", "bluefox.email-mcp@latest"],
+"args": ["/c", "npx", "-y", "@bluefox-email/mcp@latest"],
 ```
 
 Where that block goes, per client:
@@ -84,10 +84,10 @@ claude mcp add bluefox-email \
   --env BLUEFOX_BASE_URL=https://api.bluefox.email \
   --env BLUEFOX_PROJECT_ID=YOUR_PROJECT_ID \
   --env BLUEFOX_API_KEY=YOUR_API_KEY \
-  -- npx -y bluefox.email-mcp@latest
+  -- npx -y @bluefox-email/mcp@latest
 ```
 
-**Windows:** replace the last line with `-- cmd /c npx -y bluefox.email-mcp@latest` (see the Windows note above).
+**Windows:** replace the last line with `-- cmd /c npx -y @bluefox-email/mcp@latest` (see the Windows note above).
 
 **Codex CLI** also uses a single command instead of a config file:
 
@@ -96,10 +96,10 @@ codex mcp add bluefox-email \
   --env BLUEFOX_BASE_URL=https://api.bluefox.email \
   --env BLUEFOX_PROJECT_ID=YOUR_PROJECT_ID \
   --env BLUEFOX_API_KEY=YOUR_API_KEY \
-  -- npx -y bluefox.email-mcp@latest
+  -- npx -y @bluefox-email/mcp@latest
 ```
 
-**Windows:** replace the last line with `-- cmd /c npx -y bluefox.email-mcp@latest` (see the Windows note above).
+**Windows:** replace the last line with `-- cmd /c npx -y @bluefox-email/mcp@latest` (see the Windows note above).
 
 **ChatGPT (the web/app chat product)**: as of now, ChatGPT's MCP support (Settings > Connectors) expects a server
 reachable at a URL, not a local command - so this local server can't be connected from ChatGPT directly. This is
