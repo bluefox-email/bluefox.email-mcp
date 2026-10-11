@@ -50,6 +50,9 @@ export function formatEmailDetail (type, detail, stats) {
   if (type !== 'transactional') {
     lines.push(`Exclude unengaged: ${detail.excludeUnengaged ? 'yes' : 'no'}`)
   }
+  if (type === 'campaign') {
+    lines.push(`Web version: ${detail.webVersionEnabled ? 'on' : 'off'}`)
+  }
   if (detail.feeds?.length) {
     lines.push(`Feeds:\n${detail.feeds.map(feed =>
       `- ${feed.variableName || '(no variableName)'}: ${feed.url} (${feed.feedType}), maxItems ${feed.maxItems ?? 'unlimited'}, ` +
@@ -99,7 +102,8 @@ export function createEmailLifecycleTools ({ client, resolveId, resolveIdOptiona
           status: z.enum(['draft', 'archive', 'scheduled']).optional().describe('Campaign only. Set to "draft" to cancel a scheduled send. Passing scheduledFor on its own already (re)schedules - status defaults to "scheduled" then.'),
           scheduledFor: z.string().optional().describe('Campaign only. Absolute ISO 8601 date-time with a UTC offset or trailing "Z" (e.g. "2026-09-10T08:00:00-05:00") - resolve relative phrases like "tomorrow at 8am" to an absolute instant yourself first. Pass this to (re)schedule the campaign.'),
           timeZone: z.string().optional().describe('Campaign only. IANA time zone (e.g. "America/New_York") stored with the campaign and shown next to the scheduled time in the app. It does NOT shift scheduledFor.'),
-          excludeUnengaged: z.boolean().optional().describe('Campaign/triggered only.')
+          excludeUnengaged: z.boolean().optional().describe('Campaign/triggered only.'),
+          webVersionEnabled: z.boolean().optional().describe('Campaign only. Turns the public web version ("view in browser" page) on or off. Needs to be true for {{webVersionLink}} to work.')
         }
       },
       handler: async (args) => {
@@ -123,6 +127,9 @@ export function createEmailLifecycleTools ({ client, resolveId, resolveIdOptiona
         }
         if (args.excludeUnengaged !== undefined && args.type !== 'transactional') {
           body.excludeUnengaged = args.excludeUnengaged
+        }
+        if (args.webVersionEnabled !== undefined && args.type === 'campaign') {
+          body.webVersionEnabled = args.webVersionEnabled
         }
         if (args.replyTo) {
           body.replyTo = args.replyTo

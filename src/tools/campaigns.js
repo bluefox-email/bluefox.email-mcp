@@ -28,6 +28,7 @@ export function createCampaignTools ({ client, resolveIdOrRequired, resolveIdOpt
           senderIdentityEmail: z.string().optional().describe('The sender identity to send from, by its email address - looked up automatically.'),
           replyTo: z.string().optional().describe('Reply-to email address recipients\' replies go to. Defaults to the sender identity\'s own email if omitted.'),
           excludeUnengaged: z.boolean().optional().describe('Skip contacts flagged as unengaged when sending.'),
+          webVersionEnabled: z.boolean().optional().describe('Turns on the public web version ("view in browser" page) of the campaign. Off by default. Set to true when the body uses {{webVersionLink}}, otherwise that link shows "not available".'),
           feeds: feedsSchema.optional()
         }
       },
@@ -76,6 +77,9 @@ export function createCampaignTools ({ client, resolveIdOrRequired, resolveIdOpt
         }
         if (args.excludeUnengaged !== undefined) {
           body.excludeUnengaged = args.excludeUnengaged
+        }
+        if (args.webVersionEnabled !== undefined) {
+          body.webVersionEnabled = args.webVersionEnabled
         }
         if (args.feeds) {
           body.feeds = args.feeds

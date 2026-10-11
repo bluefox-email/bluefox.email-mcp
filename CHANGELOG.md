@@ -9,8 +9,11 @@ or making a param required, is a breaking change.
 
 ## [0.2.1] - 2026-10-06
 
+### Added
+- `create_campaign` and `update_email`: `webVersionEnabled` turns a campaign's public web version on or off (off by default); `get_email` shows "Web version: on/off" for campaigns.
+
 ### Changed
-- `create_campaign` and `update_email`: the `body` description documents the `{{webVersionLink}}` merge tag (public, non-personalized "view in browser" link, campaigns only, works once the campaign is sent or archived, always shows the latest version of the campaign).
+- `create_campaign` and `update_email`: the `body` description documents the `{{webVersionLink}}` merge tag (public, non-personalized "view in browser" link, campaigns only, works once the web version is enabled and the campaign is sent or archived, always shows the latest version of the campaign).
 
 ## [0.2.0] - 2026-10-02
 
