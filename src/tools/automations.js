@@ -340,6 +340,8 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           body: z.string().optional().describe(`update only, send-email/notify - HTML/text content (a Handlebars template string, supports {{unsubscribeLink}} and feed loops), only when bodyType is set. This tool cannot author the visual (Chamaileon) editor format. ${CONTACT_MERGE_TAGS}`),
           senderIdentityId: z.string().optional().describe('update only, send-email/notify.'),
           replyTo: z.string().optional().describe('update only, send-email/notify.'),
+          trackOpens: z.boolean().optional().describe('Defaults to true. Set false to stop adding the open-tracking pixel to this email (opens are not recorded). Update only, send-email.'),
+          trackClicks: z.boolean().optional().describe('Defaults to true. Set false to send links as-is instead of through the click tracker (clicks are not recorded). Update only, send-email.'),
           feeds: FEED_SCHEMA.describe('update only, send-email/notify - RSS/Atom/JSON feeds pulled into the body at send time. Only usable with bodyType "html"/"text".'),
           confirm: z.boolean().optional().describe(`add/update/delete only. ${CONFIRM_DESCRIPTION}`)
         }
@@ -414,6 +416,12 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           if (args.replyTo !== undefined) {
             body.replyTo = args.replyTo
           }
+          if (args.trackOpens !== undefined) {
+            body.trackOpens = args.trackOpens
+          }
+          if (args.trackClicks !== undefined) {
+            body.trackClicks = args.trackClicks
+          }
           if (args.feeds !== undefined) {
             body.feeds = args.feeds
           }
@@ -447,6 +455,8 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           body: z.string().optional().describe(`update only - HTML/text content (a Handlebars template string, supports {{unsubscribeLink}} and feed loops). This tool cannot author the visual (Chamaileon) editor format. ${CONTACT_MERGE_TAGS}`),
           senderIdentityId: z.string().optional().describe('update only.'),
           replyTo: z.string().optional().describe('update only.'),
+          trackOpens: z.boolean().optional().describe('Defaults to true. Set false to stop adding the open-tracking pixel to this email (opens are not recorded). Update only.'),
+          trackClicks: z.boolean().optional().describe('Defaults to true. Set false to send links as-is instead of through the click tracker (clicks are not recorded). Update only.'),
           feeds: FEED_SCHEMA.describe('update only - replaces the full feeds list. RSS/Atom/JSON feeds pulled into this email\'s body at send time (see the "body" field for how to reference a feed\'s variableName from the template). Only usable when bodyType is "html"/"text" (or was previously set) - not for the visual Chamaileon editor.'),
           confirm: z.boolean().optional().describe(`update only. ${CONFIRM_DESCRIPTION}`)
         }
@@ -474,7 +484,9 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           const email = await client.get(`/automations/${automationId}/email/${args.emailId}`)
           const type = email.type || 'chamaileon'
           const feeds = email.feeds?.length ? `\nFeeds: ${email.feeds.map(f => `${f.variableName} (${f.feedType}, ${f.url})`).join(', ')}` : ''
-          return textResult(`"${email.subject || '(no subject yet)'}" (id ${email._id})\nPreview text: ${email.previewText || '(none)'}\nType: ${type}${type === 'chamaileon' ? '' : `\nBody:\n${email.document}`}${feeds}`)
+          return textResult(`"${email.subject || '(no subject yet)'}" (id ${email._id})\nPreview text: ${email.previewText || '(none)'}\nType: ${type}
+Open tracking: ${email.trackOpens !== false ? 'on' : 'off'}
+Click tracking: ${email.trackClicks !== false ? 'on' : 'off'}${type === 'chamaileon' ? '' : `\nBody:\n${email.document}`}${feeds}`)
         }
 
         const { result: preview } = await previewUnlessConfirmed({ client, resolveIdOrRequired, id: automationId, confirm: args.confirm, verb: 'updating this step\'s email content (subject, body, etc.)' })
@@ -500,6 +512,12 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
         }
         if (args.replyTo !== undefined) {
           body.replyTo = args.replyTo
+        }
+        if (args.trackOpens !== undefined) {
+          body.trackOpens = args.trackOpens
+        }
+        if (args.trackClicks !== undefined) {
+          body.trackClicks = args.trackClicks
         }
         if (args.feeds !== undefined) {
           body.feeds = args.feeds
