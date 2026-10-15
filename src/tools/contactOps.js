@@ -6,6 +6,7 @@ import { textResult } from '../helpers/errors.js'
 import { extractCustomFields } from '../helpers/contactFields.js'
 
 const MAX_FAILURES_SHOWN = 10
+const IMPORT_BATCH_SIZE = 1000
 
 function csvEscape (value) {
   const str = value === undefined || value === null ? '' : String(value)
@@ -35,8 +36,11 @@ export function createContactOpsTools ({ client, resolveIdOrRequired }) {
     return { succeeded, failures }
   }
 
-  function formatBatchResult (verb, total, succeeded, failures) {
+  function formatBatchResult (verb, total, succeeded, failures, note) {
     const summary = [`${verb} ${succeeded}/${total} contact(s).`]
+    if (note) {
+      summary.push(note)
+    }
     if (failures.length) {
       const shown = failures.slice(0, MAX_FAILURES_SHOWN).map(f => `${f.email}: ${f.reason}`).join('; ')
       summary.push(`Failed (${failures.length}): ${shown}${failures.length > MAX_FAILURES_SHOWN ? '; ...' : ''}`)
@@ -49,7 +53,7 @@ export function createContactOpsTools ({ client, resolveIdOrRequired }) {
       name: 'bulk_update_contacts',
       config: {
         title: 'Bulk update contacts',
-        description: 'Applies one action to many contacts at once (by email), one at a time so a failure on one does not stop the rest.',
+        description: 'Applies one action to many contacts at once (by email), one at a time so a failure on one does not stop the rest. subscribe_to_list works like the app\'s bulk "assign to list": contacts not yet on the list are added as active, skipping double opt-in (no verification email), so only use it for people who already agreed to receive emails. Contacts already on the list keep their current status, so it cannot resubscribe anyone who unsubscribed - use add_list_subscriber for that.',
         inputSchema: {
           emails: z.array(z.string()).describe('The contacts to act on.'),
           action: z.enum(['delete', 'add_tags', 'remove_tags', 'add_to_suppression_list', 'subscribe_to_list', 'unsubscribe_from_list']),
@@ -68,6 +72,21 @@ export function createContactOpsTools ({ client, resolveIdOrRequired }) {
             filterField: 'name',
             label: 'subscriber list'
           })
+        }
+
+        if (args.action === 'subscribe_to_list') {
+          let imported = 0
+          let alreadyOnList = 0
+          const failures = []
+          for (let index = 0; index < args.emails.length; index += IMPORT_BATCH_SIZE) {
+            const contacts = args.emails.slice(index, index + IMPORT_BATCH_SIZE).map(email => ({ email }))
+            const result = await client.post(`/subscriber-lists/${listId}/import`, { contacts })
+            imported += result.imported
+            alreadyOnList += result.alreadyOnList
+            failures.push(...result.errors.map(error => ({ email: error.email, reason: error.message })))
+          }
+          const note = alreadyOnList ? `${alreadyOnList} were already on the list and kept their current status.` : undefined
+          return formatBatchResult('Subscribed', args.emails.length, imported, failures, note)
         }
 
         let action
@@ -92,9 +111,6 @@ export function createContactOpsTools ({ client, resolveIdOrRequired }) {
         } else if (args.action === 'add_to_suppression_list') {
           verb = 'Suppressed'
           action = email => client.post('/suppression-list', { email })
-        } else if (args.action === 'subscribe_to_list') {
-          verb = 'Subscribed'
-          action = email => client.post(`/subscriber-lists/${listId}/subscribers`, { email })
         } else {
           verb = 'Unsubscribed'
           action = email => client.patch(`/subscriber-lists/${listId}/subscribers/${encodeURIComponent(email)}`, { status: 'unsubscribed' })
@@ -187,7 +203,7 @@ export function createContactOpsTools ({ client, resolveIdOrRequired }) {
       name: 'resend_verification_email',
       config: {
         title: 'Resend a double opt-in verification email',
-        description: 'Resends the confirmation email to a contact who is still "unverified" on a list with double opt-in enabled.',
+        description: 'Resends the confirmation email to a contact who is still "unverified" on a list with double opt-in enabled. Every call sends another email, so only use it when the user asks. For an unsubscribed contact waiting to confirm, use update_list_subscriber with status "active" instead.',
         inputSchema: {
           email: z.string(),
           subscriberListId: z.string().optional(),
