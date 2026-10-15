@@ -100,7 +100,16 @@ describe('add_list_subscriber', () => {
     expect(result.content[0].text).toBe('Subscribed alice@example.com to the list (status: active).')
   })
 
-  test('subscribes a contact with name, tags, custom fields, and an explicit status to skip double opt-in', async () => {
+  test('reports that a verification email was sent when the list has double opt-in', async () => {
+    const { client, add_list_subscriber: addSubscriber } = setup()
+    client.post.mockResolvedValue({ success: true, info: 'sent' })
+
+    const result = await addSubscriber.handler({ subscriberListId: 'list123', email: 'alice@example.com', status: 'active' })
+
+    expect(result.content[0].text).toBe('The list has double opt-in, so alice@example.com was sent a verification email. They become active once they click its link.')
+  })
+
+  test('subscribes a contact with name, tags, custom fields, and an explicit status', async () => {
     const { client, add_list_subscriber: addSubscriber } = setup()
     client.post.mockResolvedValue({ email: 'alice@example.com', status: 'active' })
 
@@ -124,6 +133,15 @@ describe('add_list_subscriber', () => {
 })
 
 describe('update_list_subscriber', () => {
+  test('reports that a verification email was sent instead of activating on a double opt-in list', async () => {
+    const { client, update_list_subscriber: updateSubscriber } = setup()
+    client.patch.mockResolvedValue({ email: 'alice@example.com', status: 'unsubscribed', verificationEmailSent: true })
+
+    const result = await updateSubscriber.handler({ subscriberListId: 'list123', email: 'alice@example.com', status: 'active' })
+
+    expect(result.content[0].text).toBe('The list has double opt-in, so alice@example.com was sent a verification email instead of being activated. Their status stays "unsubscribed" until they click its link.')
+  })
+
   test('updates a subscriber\'s status', async () => {
     const { client, update_list_subscriber: updateSubscriber } = setup()
     client.patch.mockResolvedValue({ email: 'alice@example.com', status: 'unsubscribed' })

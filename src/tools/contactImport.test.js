@@ -34,24 +34,46 @@ describe('import_contacts', () => {
     expect(client.post).toHaveBeenCalledWith('/contacts', { email: 'a@example.com', plan: 'pro', name: 'Ada', tags: ['vip'] })
   })
 
-  test('subscribes each contact to a list given by id', async () => {
+  test('imports every contact to a list given by id in one bulk call', async () => {
     const { client, import_contacts: importContacts } = setup()
-    client.post.mockResolvedValue({})
+    client.post.mockResolvedValue({ imported: 2, alreadyOnList: 0, errors: [] })
 
-    const result = await importContacts.handler({ contacts: [{ email: 'a@example.com' }], subscriberListId: 'list123' })
+    const result = await importContacts.handler({ contacts: [{ email: 'a@example.com', name: 'Ada' }, { email: 'b@example.com' }], subscriberListId: 'list123' })
 
-    expect(client.post).toHaveBeenCalledWith('/subscriber-lists/list123/subscribers', { email: 'a@example.com' })
-    expect(result.content[0].text).toBe('Imported 1/1 contact(s) to the list.')
+    expect(client.post).toHaveBeenCalledTimes(1)
+    expect(client.post).toHaveBeenCalledWith('/subscriber-lists/list123/import', { contacts: [{ email: 'a@example.com', name: 'Ada' }, { email: 'b@example.com' }] })
+    expect(result.content[0].text).toBe('Imported 2/2 contact(s) to the list.')
   })
 
-  test('resolves a list given by name and passes status through', async () => {
+  test('reports contacts already on the list and per-row errors from the import', async () => {
+    const { client, import_contacts: importContacts } = setup()
+    client.post.mockResolvedValue({ imported: 1, alreadyOnList: 1, errors: [{ email: 'bad', message: 'Invalid email format' }] })
+
+    const result = await importContacts.handler({ contacts: [{ email: 'a@example.com' }, { email: 'b@example.com' }, { email: 'bad' }], subscriberListId: 'list123' })
+
+    expect(result.content[0].text).toBe('Imported 1/3 contact(s) to the list. 1 were already on the list and kept their current status. Failed (1): bad: Invalid email format')
+  })
+
+  test('splits large imports into batches of 1000', async () => {
+    const { client, import_contacts: importContacts } = setup()
+    client.post.mockImplementation((path, body) => Promise.resolve({ imported: body.contacts.length, alreadyOnList: 0, errors: [] }))
+
+    const contacts = Array.from({ length: 1500 }, (_, i) => ({ email: `c${i}@example.com` }))
+    const result = await importContacts.handler({ contacts, subscriberListId: 'list123' })
+
+    expect(client.post).toHaveBeenCalledTimes(2)
+    expect(client.post.mock.calls[1][1].contacts.length).toBe(500)
+    expect(result.content[0].text).toBe('Imported 1500/1500 contact(s) to the list.')
+  })
+
+  test('resolves a list given by name and ignores status', async () => {
     const { client, import_contacts: importContacts } = setup()
     client.get.mockResolvedValue({ count: 1, items: [{ _id: 'list456' }] })
-    client.post.mockResolvedValue({})
+    client.post.mockResolvedValue({ imported: 1, alreadyOnList: 0, errors: [] })
 
-    await importContacts.handler({ contacts: [{ email: 'a@example.com' }], subscriberListName: 'Newsletter', status: 'active' })
+    await importContacts.handler({ contacts: [{ email: 'a@example.com' }], subscriberListName: 'Newsletter', status: 'unverified' })
 
-    expect(client.post).toHaveBeenCalledWith('/subscriber-lists/list456/subscribers', { email: 'a@example.com', status: 'active' })
+    expect(client.post).toHaveBeenCalledWith('/subscriber-lists/list456/import', { contacts: [{ email: 'a@example.com' }] })
   })
 
   test('does not send status when no list is given', async () => {

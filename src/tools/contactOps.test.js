@@ -72,14 +72,34 @@ describe('bulk_update_contacts', () => {
     expect(result.content[0].text).toBe('Suppressed 1/1 contact(s).')
   })
 
-  test('subscribes to a list resolved by id', async () => {
+  test('subscribes to a list resolved by id through the bulk import', async () => {
     const { client, bulk_update_contacts: bulkUpdate } = setup()
-    client.post.mockResolvedValue({})
+    client.post.mockResolvedValue({ imported: 1, alreadyOnList: 0, errors: [] })
 
     const result = await bulkUpdate.handler({ emails: ['a@example.com'], action: 'subscribe_to_list', subscriberListId: 'list1' })
 
-    expect(client.post).toHaveBeenCalledWith('/subscriber-lists/list1/subscribers', { email: 'a@example.com' })
+    expect(client.post).toHaveBeenCalledWith('/subscriber-lists/list1/import', { contacts: [{ email: 'a@example.com' }] })
     expect(result.content[0].text).toBe('Subscribed 1/1 contact(s).')
+  })
+
+  test('reports contacts already on the list and failed rows when subscribing', async () => {
+    const { client, bulk_update_contacts: bulkUpdate } = setup()
+    client.post.mockResolvedValue({ imported: 1, alreadyOnList: 1, errors: [{ email: 'bad', message: 'Invalid email format' }] })
+
+    const result = await bulkUpdate.handler({ emails: ['a@example.com', 'b@example.com', 'bad'], action: 'subscribe_to_list', subscriberListId: 'list1' })
+
+    expect(result.content[0].text).toBe('Subscribed 1/3 contact(s). 1 were already on the list and kept their current status. Failed (1): bad: Invalid email format')
+  })
+
+  test('subscribes large batches in chunks of 1000', async () => {
+    const { client, bulk_update_contacts: bulkUpdate } = setup()
+    client.post.mockImplementation((path, body) => Promise.resolve({ imported: body.contacts.length, alreadyOnList: 0, errors: [] }))
+
+    const emails = Array.from({ length: 1200 }, (_, i) => `c${i}@example.com`)
+    const result = await bulkUpdate.handler({ emails, action: 'subscribe_to_list', subscriberListId: 'list1' })
+
+    expect(client.post).toHaveBeenCalledTimes(2)
+    expect(result.content[0].text).toBe('Subscribed 1200/1200 contact(s).')
   })
 
   test('unsubscribes from a list resolved by name', async () => {
