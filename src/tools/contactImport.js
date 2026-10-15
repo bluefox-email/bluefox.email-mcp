@@ -10,7 +10,7 @@ export function createContactImportTools ({ client, resolveIdOptional }) {
       name: 'import_contacts',
       config: {
         title: 'Bulk import contacts',
-        description: 'Creates (or subscribes) many contacts at once; a failure on one row does not stop the rest. Pass a subscriber list to add every imported contact to it as active - like the app\'s CSV import, this skips double opt-in and sends no verification email, so only import people who already agreed to your emails. Contacts already on the list keep their current status (an unsubscribed contact stays unsubscribed). Omit the list to just create bare contacts.',
+        description: 'Creates (or subscribes) many contacts at once; a failure on one row does not stop the rest. Pass a subscriber list to add every imported contact to it as active - like the app\'s CSV import, this skips double opt-in and sends no verification email, so only import people who already agreed to your emails - confirm that with the user first. Contacts already on the list keep their current status (an unsubscribed contact stays unsubscribed), so import cannot be used to resubscribe anyone. Prefer this over add_list_subscriber for many contacts, since that sends a verification email to each one on a double opt-in list. Omit the list to just create bare contacts.',
         inputSchema: {
           contacts: z.array(z.object({
             email: z.string(),

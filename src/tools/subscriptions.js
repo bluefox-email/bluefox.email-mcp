@@ -83,7 +83,7 @@ export function createSubscriptionTools ({ client, resolveIdOrRequired }) {
       name: 'add_list_subscriber',
       config: {
         title: 'Add (subscribe) a contact to a subscriber list',
-        description: 'Subscribes a contact to a subscriber list, creating the contact first if it does not already exist. If the list has double opt-in enabled, a new, unverified, or unsubscribed contact is sent a verification email and only becomes active once they click its link - this cannot be skipped, not even with status: "active". A paused contact is reactivated right away.',
+        description: 'Subscribes a contact to a subscriber list, creating the contact first if it does not already exist. Any name, tags, or custom fields passed here overwrite an existing contact\'s values - to only change contact data, use update_contact. If the list has double opt-in enabled, a new, unverified, or unsubscribed contact is sent a verification email and only becomes active once they click its link - this cannot be skipped, not even with status: "active". A paused contact is reactivated right away. Each call for an unverified or unsubscribed contact sends another email, so do not retry or repeat it hoping to change their status - it only changes when they click the link. Before resubscribing someone who unsubscribed, tell the user they will receive an email. To add many contacts who already agreed to receive emails, use import_contacts instead - it sends no verification emails.',
         inputSchema: {
           subscriberListId: z.string().optional(),
           subscriberListName: z.string().optional().describe('Looked up automatically.'),
@@ -123,7 +123,7 @@ export function createSubscriptionTools ({ client, resolveIdOrRequired }) {
       name: 'update_list_subscriber',
       config: {
         title: 'Update a contact\'s subscription status on a list',
-        description: 'Updates a contact\'s status on a specific subscriber list - e.g. unsubscribe, resubscribe, or pause them on that one list, without affecting their other list subscriptions. Can also update their email/name/tags/custom fields as seen from that list. If the list has double opt-in enabled, setting an unverified or unsubscribed contact to "active" sends them a verification email instead, and their status stays the same until they click its link. A paused contact is reactivated right away.',
+        description: 'Updates a contact\'s status on a specific subscriber list - e.g. unsubscribe, resubscribe, or pause them on that one list, without affecting their other list subscriptions. It can also change their email/name/tags/custom fields, but prefer update_contact for that and use this tool for the subscription status. If the list has double opt-in enabled, setting an unverified or unsubscribed contact to "active" sends them a verification email instead, and their status stays the same until they click its link. A paused contact is reactivated right away. Every such call sends another email, so do not repeat it when the status still shows unverified or unsubscribed - that is expected until the contact confirms.',
         inputSchema: {
           subscriberListId: z.string().optional(),
           subscriberListName: z.string().optional().describe('Looked up automatically.'),

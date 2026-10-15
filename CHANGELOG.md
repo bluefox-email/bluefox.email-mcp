@@ -12,6 +12,9 @@ or making a param required, is a breaking change.
 ### Changed
 - `add_list_subscriber`: on a list with double opt-in, `status: "active"` no longer skips the verification email (the API now always sends it to new, unverified, or unsubscribed contacts). The result says when a verification email was sent instead of reporting an undefined subscriber.
 - `import_contacts` with a list: uses the new bulk import endpoint (batches of 1000) instead of subscribing one row at a time. Like the app's CSV import, it adds contacts as active without double opt-in, and contacts already on the list keep their status. `status` is now ignored.
+- `bulk_update_contacts` with `subscribe_to_list`: uses the bulk import endpoint, like the app's bulk "assign to list". Contacts not yet on the list are added as active without double opt-in; contacts already on the list keep their status. The result reports how many were already on the list.
+- `update_contact`, `add_list_subscriber`, `update_list_subscriber`: descriptions steer contact data changes to `update_contact` and keep the list tools for subscription changes.
+- `add_list_subscriber`, `update_list_subscriber`, `import_contacts`, `resend_verification_email`: descriptions warn the agent that each call can send another verification email on a double opt-in list, not to retry to force a status change, and to prefer `import_contacts` for contacts who already agreed.
 - `update_list_subscriber`: on a list with double opt-in, setting an unverified or unsubscribed contact to `active` sends the verification email instead, and the result says so. Paused contacts are still reactivated directly.
 
 ## [0.2.1] - 2026-10-06
