@@ -19,7 +19,7 @@ export function createContactImportTools ({ client, resolveIdOptional }) {
           })).describe('The rows to import.'),
           subscriberListId: z.string().optional(),
           subscriberListName: z.string().optional().describe('The list to subscribe every imported contact to, by name - looked up automatically. Omit both this and subscriberListId to just create contacts without subscribing them to any list.'),
-          status: z.enum(['active', 'unverified']).optional().describe('Only used when subscribing to a list. Defaults to triggering double opt-in (if the list has it enabled) or "active" otherwise. Pass "active" explicitly to skip double opt-in for every row.')
+          status: z.enum(['active', 'unverified']).optional().describe('Only used when subscribing to a list. Ignored when the list has double opt-in enabled - every new, unverified, or unsubscribed row is sent a verification email then. Otherwise rows are made "active".')
         }
       },
       handler: async (args) => {
@@ -32,6 +32,7 @@ export function createContactImportTools ({ client, resolveIdOptional }) {
         })
 
         let succeeded = 0
+        let verificationSent = 0
         const failures = []
 
         for (const contact of args.contacts) {
@@ -48,7 +49,10 @@ export function createContactImportTools ({ client, resolveIdOptional }) {
 
           try {
             if (listId) {
-              await client.post(`/subscriber-lists/${listId}/subscribers`, body)
+              const result = await client.post(`/subscriber-lists/${listId}/subscribers`, body)
+              if (result.success) {
+                verificationSent++
+              }
             } else {
               await client.post('/contacts', body)
             }
@@ -59,6 +63,9 @@ export function createContactImportTools ({ client, resolveIdOptional }) {
         }
 
         const summary = [`Imported ${succeeded}/${args.contacts.length} contact(s)${listId ? ' to the list' : ''}.`]
+        if (verificationSent) {
+          summary.push(`The list has double opt-in, so ${verificationSent} of them were sent a verification email and become active once they click its link.`)
+        }
         if (failures.length) {
           const shown = failures.slice(0, MAX_FAILURES_SHOWN).map(f => `${f.email}: ${f.reason}`).join('; ')
           summary.push(`Failed (${failures.length}): ${shown}${failures.length > MAX_FAILURES_SHOWN ? '; ...' : ''}`)

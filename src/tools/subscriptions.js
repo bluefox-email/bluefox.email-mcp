@@ -83,14 +83,14 @@ export function createSubscriptionTools ({ client, resolveIdOrRequired }) {
       name: 'add_list_subscriber',
       config: {
         title: 'Add (subscribe) a contact to a subscriber list',
-        description: 'Subscribes a contact to a subscriber list, creating the contact first if it does not already exist. If the list has double opt-in enabled, the contact stays "unverified" until they confirm by email - pass status: "active" to skip double opt-in and activate immediately instead.',
+        description: 'Subscribes a contact to a subscriber list, creating the contact first if it does not already exist. If the list has double opt-in enabled, a new, unverified, or unsubscribed contact is sent a verification email and only becomes active once they click its link - this cannot be skipped, not even with status: "active". A paused contact is reactivated right away.',
         inputSchema: {
           subscriberListId: z.string().optional(),
           subscriberListName: z.string().optional().describe('Looked up automatically.'),
           email: z.string(),
           name: z.string().optional(),
           tags: z.array(z.string()).optional().describe('Tags are created automatically if they do not already exist.'),
-          status: z.enum(['active', 'unverified']).optional().describe('Defaults to triggering double opt-in (if the list has it enabled) or "active" (if it doesn\'t). Pass "active" explicitly to skip double opt-in.'),
+          status: z.enum(['active', 'unverified']).optional().describe('Ignored when the list has double opt-in enabled - the verification email is always sent then. Otherwise the contact is made "active".'),
           customFields: customFieldsSchema
         }
       },
@@ -113,6 +113,9 @@ export function createSubscriptionTools ({ client, resolveIdOrRequired }) {
           body.status = args.status
         }
         const result = await client.post(`/subscriber-lists/${id}/subscribers`, body)
+        if (result.success) {
+          return textResult(`The list has double opt-in, so ${args.email} was sent a verification email. They become active once they click its link.`)
+        }
         return textResult(`Subscribed ${result.email} to the list (status: ${result.status}).`)
       }
     },
@@ -120,7 +123,7 @@ export function createSubscriptionTools ({ client, resolveIdOrRequired }) {
       name: 'update_list_subscriber',
       config: {
         title: 'Update a contact\'s subscription status on a list',
-        description: 'Updates a contact\'s status on a specific subscriber list - e.g. unsubscribe, resubscribe, or pause them on that one list, without affecting their other list subscriptions. Can also update their email/name/tags/custom fields as seen from that list.',
+        description: 'Updates a contact\'s status on a specific subscriber list - e.g. unsubscribe, resubscribe, or pause them on that one list, without affecting their other list subscriptions. Can also update their email/name/tags/custom fields as seen from that list. If the list has double opt-in enabled, setting an unverified or unsubscribed contact to "active" sends them a verification email instead, and their status stays the same until they click its link. A paused contact is reactivated right away.',
         inputSchema: {
           subscriberListId: z.string().optional(),
           subscriberListName: z.string().optional().describe('Looked up automatically.'),
@@ -158,6 +161,9 @@ export function createSubscriptionTools ({ client, resolveIdOrRequired }) {
           body.pausedUntil = args.pausedUntil
         }
         const result = await client.patch(`/subscriber-lists/${id}/subscribers/${encodeURIComponent(args.email)}`, body)
+        if (result.verificationEmailSent) {
+          return textResult(`The list has double opt-in, so ${result.email} was sent a verification email instead of being activated. Their status stays "${result.status}" until they click its link.`)
+        }
         return textResult(`Updated ${result.email} on the list (status: ${result.status}).`)
       }
     }

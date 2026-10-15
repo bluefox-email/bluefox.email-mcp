@@ -44,6 +44,16 @@ describe('import_contacts', () => {
     expect(result.content[0].text).toBe('Imported 1/1 contact(s) to the list.')
   })
 
+  test('reports how many rows were sent a double opt-in verification email', async () => {
+    const { client, import_contacts: importContacts } = setup()
+    client.post.mockResolvedValueOnce({ success: true, info: 'sent' })
+    client.post.mockResolvedValueOnce({ email: 'b@example.com', status: 'active' })
+
+    const result = await importContacts.handler({ contacts: [{ email: 'a@example.com' }, { email: 'b@example.com' }], subscriberListId: 'list123' })
+
+    expect(result.content[0].text).toBe('Imported 2/2 contact(s) to the list. The list has double opt-in, so 1 of them were sent a verification email and become active once they click its link.')
+  })
+
   test('resolves a list given by name and passes status through', async () => {
     const { client, import_contacts: importContacts } = setup()
     client.get.mockResolvedValue({ count: 1, items: [{ _id: 'list456' }] })

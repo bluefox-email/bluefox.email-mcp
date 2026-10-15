@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Tool names and input schemas are the public API: removing/renaming a tool or param,
 or making a param required, is a breaking change.
 
+## [0.2.2] - 2026-10-15
+
+### Changed
+- `add_list_subscriber` and `import_contacts`: on a list with double opt-in, `status: "active"` no longer skips the verification email (the API now always sends it to new, unverified, or unsubscribed contacts). The result says when a verification email was sent instead of reporting an undefined subscriber.
+- `update_list_subscriber`: on a list with double opt-in, setting an unverified or unsubscribed contact to `active` sends the verification email instead, and the result says so. Paused contacts are still reactivated directly.
+
 ## [0.2.1] - 2026-10-06
 
 ### Added
