@@ -440,6 +440,8 @@ describe('manage_automation_node', () => {
       body: '<p>hi</p>',
       senderIdentityId: 'sender1',
       replyTo: 'reply@example.com',
+      trackOpens: false,
+      trackClicks: false,
       feeds,
       confirm: true
     })
@@ -452,6 +454,8 @@ describe('manage_automation_node', () => {
       document: '<p>hi</p>',
       senderIdentity: 'sender1',
       replyTo: 'reply@example.com',
+      trackOpens: false,
+      trackClicks: false,
       feeds
     })
   })
@@ -569,7 +573,15 @@ describe('manage_automation_email_content', () => {
     client.get.mockResolvedValue({ _id: 'email1', subject: 'Welcome', previewText: 'Hi there' })
 
     const result = await byName.manage_automation_email_content.handler({ action: 'get', automationId: 'auto1', emailId: 'email1' })
-    expect(result.content[0].text).toBe('"Welcome" (id email1)\nPreview text: Hi there\nType: chamaileon')
+    expect(result.content[0].text).toBe('"Welcome" (id email1)\nPreview text: Hi there\nType: chamaileon\nOpen tracking: on\nClick tracking: on')
+  })
+
+  test('get shows open/click tracking turned off', async () => {
+    const { client, byName } = setup()
+    client.get.mockResolvedValue({ _id: 'email1', subject: 'Welcome', previewText: 'Hi there', trackOpens: false, trackClicks: false })
+
+    const result = await byName.manage_automation_email_content.handler({ action: 'get', automationId: 'auto1', emailId: 'email1' })
+    expect(result.content[0].text).toContain('Open tracking: off\nClick tracking: off')
   })
 
   test('get formats an html/text email including the body', async () => {
@@ -613,6 +625,8 @@ describe('manage_automation_email_content', () => {
       body: '<p>hi</p>',
       senderIdentityId: 'sender1',
       replyTo: 'reply@example.com',
+      trackOpens: false,
+      trackClicks: false,
       confirm: true
     })
 
@@ -622,7 +636,9 @@ describe('manage_automation_email_content', () => {
       type: 'html',
       document: '<p>hi</p>',
       senderIdentity: 'sender1',
-      replyTo: 'reply@example.com'
+      replyTo: 'reply@example.com',
+      trackOpens: false,
+      trackClicks: false
     })
   })
 

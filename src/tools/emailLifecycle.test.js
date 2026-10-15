@@ -123,6 +123,14 @@ describe('update_email', () => {
     expect(client.patch).toHaveBeenLastCalledWith('/triggered-emails/email123', {})
   })
 
+  test('sends trackOpens/trackClicks for any email type', async () => {
+    const { client, update_email: updateEmail } = setup()
+    client.patch.mockResolvedValue({ _id: 'email123', name: 'Welcome' })
+
+    await updateEmail.handler({ type: 'transactional', emailId: 'email123', trackOpens: false, trackClicks: true })
+    expect(client.patch).toHaveBeenLastCalledWith('/transactional-emails/email123', { trackOpens: false, trackClicks: true })
+  })
+
   test('resolves a campaign by name when no id is given', async () => {
     const { client, update_email: updateEmail } = setup()
     client.get.mockResolvedValue({ items: [{ _id: 'campaign123' }] })
@@ -232,6 +240,7 @@ describe('get_email', () => {
           document: '<p>Big discounts this week!</p>',
           excludeUnengaged: true,
           webVersionEnabled: true,
+          trackOpens: false,
           feeds: [{ url: 'https://example.com/feed.xml', feedType: 'rss-xml', variableName: 'news', maxItems: 5, required: true, availableFields: ['title', 'link'] }]
         }
       }
@@ -252,6 +261,8 @@ describe('get_email', () => {
     expect(text).toContain('Reply-to: support@example.com')
     expect(text).toContain('Exclude unengaged: yes')
     expect(text).toContain('Web version: on')
+    expect(text).toContain('Open tracking: off')
+    expect(text).toContain('Click tracking: on')
     expect(text).toContain('- news: https://example.com/feed.xml (rss-xml), maxItems 5, required: yes, available fields: title, link')
     expect(text).toContain('Stats: 100 sent, 3 failed, 40 opens (35 unique), 10 clicks (8 unique), 2 bounced, 0 complaints.')
   })
