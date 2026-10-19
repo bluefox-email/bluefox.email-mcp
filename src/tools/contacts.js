@@ -164,7 +164,7 @@ export function createContactTools ({ client, resolveIdOptional }) {
       name: 'update_contact',
       config: {
         title: 'Update contact',
-        description: 'Updates an existing contact\'s email, name, tags, or custom fields.',
+        description: 'Updates an existing contact\'s email, name, tags, or custom fields. Use this for any contact data change; use the subscriber list tools only to subscribe, unsubscribe, pause, or activate.',
         inputSchema: {
           email: z.string().describe('The contact\'s current email, to find them by.'),
           newEmail: z.string().optional().describe('Set this to change the contact\'s email address.'),
