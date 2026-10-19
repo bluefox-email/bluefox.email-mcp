@@ -58,7 +58,7 @@ Most MCP clients use the same config shape - a `command` to run plus the three e
 ```
 
 `@latest` makes your agent pick up new versions when it restarts. To stay on one version, pin it instead (for
-example `@bluefox-email/mcp@0.2.2`).
+example `@bluefox-email/mcp@0.2.3`).
 
 **Windows:** `npx` is a `.cmd` shim on Windows, and most MCP clients launch the server without a shell. That fails
 silently (`spawn UNKNOWN`). Use this `command`/`args` shape instead and keep everything else the same:
