@@ -1,0 +1,35 @@
+name: Build & publish to NPM
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  id-token: write  # Required for OIDC
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 'master'
+
+      - name: Use Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install npm
+        run: npm install -g npm@latest
+
+      - name: Install dependencies
+        run: npm i
+
+      - name: Run tests
+        run: npm test
+
+      - name: Publish to npm
+        run: npm publish

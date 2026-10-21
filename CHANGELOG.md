@@ -7,11 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Tool names and input schemas are the public API: removing/renaming a tool or param,
 or making a param required, is a breaking change.
 
-## [0.2.3] - 2026-10-15
+## [0.2.4] - 2026-10-21
 
 ### Added
 - `create_campaign`, `create_transactional_email`, `create_triggered_email`, `update_email`, `manage_automation_email_content` (update) and `manage_automation_node` (send-email update): `trackOpens` / `trackClicks` turn open and click tracking on or off per email (both on by default).
 - `get_email` and `manage_automation_email_content` (get) show "Open tracking: on/off" and "Click tracking: on/off".
+
+## [0.2.3] - 2026-10-20
+
+### Fixed
+- `npx @bluefox-email/mcp` exited silently on Windows: the command is renamed from `bluefox.email-mcp` to `bluefox-email-mcp`, because Windows `cmd` can't run a command name with a dot in it. If you installed it with `npm link` and use `bluefox.email-mcp` as your MCP `command`, switch to the `npx` setup in the README.
 
 ## [0.2.2] - 2026-10-15
 
@@ -44,6 +49,8 @@ First versioned release. Changes before this version are not tracked here.
 ### Added
 - `list_contacts`: list and filter contacts by subscriber list, saved segment (name or id), tags and contact fields.
 
+[0.2.3]: https://github.com/bluefox-email/bluefox.email-mcp/releases/tag/v0.2.3
+[0.2.2]: https://github.com/bluefox-email/bluefox.email-mcp/releases/tag/v0.2.2
 [0.2.1]: https://github.com/bluefox-email/bluefox.email-mcp/releases/tag/v0.2.1
 [0.2.0]: https://github.com/bluefox-email/bluefox.email-mcp/releases/tag/v0.2.0
 [0.1.0]: https://github.com/bluefox-email/bluefox.email-mcp/releases/tag/v0.1.0
