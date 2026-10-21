@@ -37,6 +37,7 @@ describe('update_email', () => {
       bodyType: 'html',
       previewText: 'New preview',
       excludeUnengaged: true,
+      webVersionEnabled: true,
       senderIdentityEmail: 'hello@example.com',
       replyTo: 'support@example.com',
       feeds: [{ url: 'https://example.com/feed.xml', feedType: 'rss-xml', variableName: 'news' }],
@@ -54,6 +55,7 @@ describe('update_email', () => {
       type: 'html',
       previewText: 'New preview',
       excludeUnengaged: true,
+      webVersionEnabled: true,
       replyTo: 'support@example.com',
       feeds: [{ url: 'https://example.com/feed.xml', feedType: 'rss-xml', variableName: 'news' }],
       senderIdentity: 'sender123',
@@ -111,6 +113,25 @@ describe('update_email', () => {
     await updateEmail.handler({ type: 'transactional', emailId: 'email123', excludeUnengaged: true })
 
     expect(client.patch).toHaveBeenCalledWith('/transactional-emails/email123', {})
+  })
+
+  test('sends webVersionEnabled: false to turn off a campaign\'s web version, but never for a triggered email', async () => {
+    const { client, update_email: updateEmail } = setup()
+    client.patch.mockResolvedValue({ _id: 'campaign123', name: 'Summer Sale' })
+
+    await updateEmail.handler({ type: 'campaign', emailId: 'campaign123', webVersionEnabled: false })
+    expect(client.patch).toHaveBeenLastCalledWith('/campaigns/campaign123', { webVersionEnabled: false })
+
+    await updateEmail.handler({ type: 'triggered', emailId: 'email123', webVersionEnabled: true })
+    expect(client.patch).toHaveBeenLastCalledWith('/triggered-emails/email123', {})
+  })
+
+  test('sends trackOpens/trackClicks for any email type', async () => {
+    const { client, update_email: updateEmail } = setup()
+    client.patch.mockResolvedValue({ _id: 'email123', name: 'Welcome' })
+
+    await updateEmail.handler({ type: 'transactional', emailId: 'email123', trackOpens: false, trackClicks: true })
+    expect(client.patch).toHaveBeenLastCalledWith('/transactional-emails/email123', { trackOpens: false, trackClicks: true })
   })
 
   test('resolves a campaign by name when no id is given', async () => {
@@ -221,6 +242,8 @@ describe('get_email', () => {
           type: 'html',
           document: '<p>Big discounts this week!</p>',
           excludeUnengaged: true,
+          webVersionEnabled: true,
+          trackOpens: false,
           feeds: [{ url: 'https://example.com/feed.xml', feedType: 'rss-xml', variableName: 'news', maxItems: 5, required: true, availableFields: ['title', 'link'] }]
         }
       }
@@ -240,6 +263,9 @@ describe('get_email', () => {
     expect(text).toContain('Sender identity id: sender123')
     expect(text).toContain('Reply-to: support@example.com')
     expect(text).toContain('Exclude unengaged: yes')
+    expect(text).toContain('Web version: on')
+    expect(text).toContain('Open tracking: off')
+    expect(text).toContain('Click tracking: on')
     expect(text).toContain('- news: https://example.com/feed.xml (rss-xml), maxItems 5, required: yes, available fields: title, link')
     expect(text).toContain('Stats: 100 sent, 3 failed, 40 opens (35 unique), 10 clicks (8 unique), 2 bounced, 0 complaints.')
   })
@@ -264,6 +290,7 @@ describe('get_email', () => {
     const text = result.content[0].text
 
     expect(text).toContain('(time zone: UTC)')
+    expect(text).toContain('Web version: off')
     expect(text).toContain('- (no variableName): https://example.com/feed.xml (json), maxItems unlimited, required: no')
   })
 
@@ -282,6 +309,7 @@ describe('get_email', () => {
     expect(text).toContain('Content type: chamaileon (visual editor)')
     expect(text).not.toContain('Body:')
     expect(text).not.toContain('Exclude unengaged')
+    expect(text).not.toContain('Web version')
     expect(text).not.toContain('Status:')
     expect(text).toContain('Stats: 0 sent, 0 failed')
   })

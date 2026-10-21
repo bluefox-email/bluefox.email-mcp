@@ -3,7 +3,7 @@ import { textResult } from '../helpers/errors.js'
 import { normalizeScheduledFor } from '../helpers/scheduledFor.js'
 import { feedsSchema } from './feedsSchema.js'
 import { formatEmailDetail } from './emailLifecycle.js'
-import { CONTACT_MERGE_TAGS } from './mergeTags.js'
+import { CONTACT_MERGE_TAGS, WEB_VERSION_MERGE_TAG } from './mergeTags.js'
 import { chamaileonInputSchema, resolveCreateContent } from '../helpers/chamaileonDocument.js'
 
 export function createCampaignTools ({ client, resolveIdOrRequired, resolveIdOptional }) {
@@ -16,7 +16,7 @@ export function createCampaignTools ({ client, resolveIdOrRequired, resolveIdOpt
         inputSchema: {
           name: z.string().describe('Internal campaign name - not shown to recipients.'),
           subject: z.string().describe('Email subject line.'),
-          body: z.string().optional().describe(`Email body as a Handlebars template string - supports {{unsubscribeLink}} and feed loops. Required unless a Chamaileon JSON is given instead (chamaileonJsonPath/chamaileonJson). This tool cannot start from a saved template. ${CONTACT_MERGE_TAGS}`),
+          body: z.string().optional().describe(`Email body as a Handlebars template string - supports {{unsubscribeLink}} and feed loops. Required unless a Chamaileon JSON is given instead (chamaileonJsonPath/chamaileonJson). This tool cannot start from a saved template. ${CONTACT_MERGE_TAGS} ${WEB_VERSION_MERGE_TAG}`),
           bodyType: z.enum(['html', 'text']).optional().describe('Defaults to "text" if omitted. Not used with a Chamaileon JSON.'),
           ...chamaileonInputSchema,
           subscriberListId: z.string().optional().describe('The subscriber list to send to, by id.'),
@@ -30,6 +30,9 @@ export function createCampaignTools ({ client, resolveIdOrRequired, resolveIdOpt
           senderIdentityEmail: z.string().optional().describe('The sender identity to send from, by its email address - looked up automatically.'),
           replyTo: z.string().optional().describe('Reply-to email address recipients\' replies go to. Defaults to the sender identity\'s own email if omitted.'),
           excludeUnengaged: z.boolean().optional().describe('Skip contacts flagged as unengaged when sending.'),
+          trackOpens: z.boolean().optional().describe('Defaults to true. Set false to stop adding the open-tracking pixel to this email (opens are not recorded).'),
+          trackClicks: z.boolean().optional().describe('Defaults to true. Set false to send links as-is instead of through the click tracker (clicks are not recorded).'),
+          webVersionEnabled: z.boolean().optional().describe('Turns on the public web version ("view in browser" page) of the campaign. Off by default. Set to true when the body uses {{webVersionLink}}, otherwise that link shows "not available".'),
           feeds: feedsSchema.optional()
         }
       },
@@ -77,6 +80,15 @@ export function createCampaignTools ({ client, resolveIdOrRequired, resolveIdOpt
         }
         if (args.excludeUnengaged !== undefined) {
           body.excludeUnengaged = args.excludeUnengaged
+        }
+        if (args.webVersionEnabled !== undefined) {
+          body.webVersionEnabled = args.webVersionEnabled
+        }
+        if (args.trackOpens !== undefined) {
+          body.trackOpens = args.trackOpens
+        }
+        if (args.trackClicks !== undefined) {
+          body.trackClicks = args.trackClicks
         }
         if (args.feeds) {
           body.feeds = args.feeds

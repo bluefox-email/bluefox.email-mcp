@@ -56,6 +56,9 @@ describe('create_campaign', () => {
       previewText: 'Save big',
       replyTo: 'support@example.com',
       excludeUnengaged: true,
+      webVersionEnabled: true,
+      trackOpens: false,
+      trackClicks: false,
       scheduledFor: '2026-08-01T08:00:00.000Z',
       timeZone: 'America/New_York'
     })
@@ -71,6 +74,9 @@ describe('create_campaign', () => {
       previewText: 'Save big',
       replyTo: 'support@example.com',
       excludeUnengaged: true,
+      webVersionEnabled: true,
+      trackOpens: false,
+      trackClicks: false,
       status: 'scheduled',
       scheduledTo: '2026-08-01T08:00:00.000Z'
     })
