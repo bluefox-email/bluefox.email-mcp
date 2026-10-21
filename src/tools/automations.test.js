@@ -1,4 +1,7 @@
 import { describe, expect, test } from 'vitest'
+import fs from 'fs/promises'
+import os from 'os'
+import path from 'path'
 import { createAutomationTools } from './automations.js'
 import { createResolveId } from '../helpers/resolveId.js'
 import { createFakeClient } from '../helpers/fakeClient.js'
@@ -572,6 +575,18 @@ describe('manage_automation_email_content', () => {
     expect(result.content[0].text).toBe('"Welcome" (id email1)\nPreview text: Hi there\nType: chamaileon')
   })
 
+  test('get saves the visual editor document to chamaileonJsonOutputPath', async () => {
+    const { client, byName } = setup()
+    const document = { body: { children: [] } }
+    client.get.mockResolvedValue({ _id: 'email1', subject: 'Welcome', document })
+    const outputPath = path.join(os.tmpdir(), `automation-email-export-${Date.now()}.json`)
+
+    const result = await byName.manage_automation_email_content.handler({ action: 'get', automationId: 'auto1', emailId: 'email1', chamaileonJsonOutputPath: outputPath })
+    expect(result.content[0].text).toBe(`"Welcome" (id email1)\nPreview text: (none)\nType: chamaileon\nSaved the Chamaileon JSON to: ${outputPath}`)
+    expect(JSON.parse(await fs.readFile(outputPath, 'utf8'))).toEqual(document)
+    await fs.rm(outputPath)
+  })
+
   test('get formats an html/text email including the body', async () => {
     const { client, byName } = setup()
     client.get.mockResolvedValue({ _id: 'email1', subject: '', previewText: '', type: 'text', document: 'Hello!' })
@@ -651,7 +666,7 @@ describe('manage_automation_email_content', () => {
 
     await byName.manage_automation_email_content.handler({ action: 'update', automationId: 'auto1', emailId: 'email1', chamaileonJson: JSON.stringify({ body: { children: [] } }), confirm: true })
 
-    expect(client.patch).toHaveBeenCalledWith('/automations/auto1/email/email1', { type: 'chamaileon', document: { body: { children: [] } } })
+    expect(client.patch).toHaveBeenCalledWith('/automations/auto1/email/email1', { type: 'chamaileon', document: expect.objectContaining({ body: expect.objectContaining({ type: 'body', children: [] }) }) })
   })
 
   test('update omits fields that were not given', async () => {

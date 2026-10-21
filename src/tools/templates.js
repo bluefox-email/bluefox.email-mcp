@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { textResult } from '../helpers/errors.js'
-import { chamaileonInputSchema, readChamaileonDocument } from '../helpers/chamaileonDocument.js'
+import { chamaileonInputSchema, chamaileonOutputSchema, readChamaileonDocument, writeChamaileonDocument } from '../helpers/chamaileonDocument.js'
 
 function formatTemplateDetail (template) {
   return `"${template.name}" (id ${template._id}) - subject: "${template.subject}"${template.previewText ? `, preview: "${template.previewText}"` : ''}. Tags: ${(template.tags || []).join(', ') || 'none'}. On new project creation: ${template.onProjectCreation || 'do-nothing'}.`
@@ -12,7 +12,7 @@ export function createTemplateTools ({ client, resolveIdOrRequired }) {
       name: 'manage_templates',
       config: {
         title: 'Manage templates',
-        description: 'Lists, inspects, duplicates, uploads, renames, or deletes templates from bluefox.email\'s visual (Chamaileon) editor. This tool cannot author a template\'s visual content (its "document") from scratch - that only happens in the app\'s drag-and-drop editor - so create either duplicates an existing template\'s visual content under new metadata, or uploads a ready-made Chamaileon JSON (chamaileonJsonPath/chamaileonJson, subject then required); update can also replace the visual content with an uploaded Chamaileon JSON. It cannot create a campaign/transactional/triggered email FROM a template - to put the same visual content on an email, pass the Chamaileon JSON to that email\'s create/update tool instead.',
+        description: 'Lists, inspects, duplicates, uploads, renames, or deletes templates from bluefox.email\'s visual (Chamaileon) editor. Create either duplicates an existing template\'s visual content under new metadata, or uploads a Chamaileon JSON (chamaileonJsonPath/chamaileonJson, subject then required); update can also replace the visual content with an uploaded Chamaileon JSON, and get can save it to a file with chamaileonJsonOutputPath. It cannot create a campaign/transactional/triggered email FROM a template - to put the same visual content on an email, pass the Chamaileon JSON to that email\'s create/update tool instead.',
         inputSchema: {
           action: z.enum(['list', 'get', 'create', 'update', 'delete']),
           templateId: z.string().optional(),
@@ -25,7 +25,8 @@ export function createTemplateTools ({ client, resolveIdOrRequired }) {
           previewText: z.string().optional().describe('create/update. On create, defaults to the source template\'s previewText if omitted. On update, pass an empty string to clear it.'),
           tags: z.array(z.string()).optional().describe('create/update - replaces the whole tag list. On create, defaults to the source template\'s tags if omitted.'),
           onProjectCreation: z.enum(['do-nothing', 'set-as-transactional', 'set-as-triggered', 'set-as-campaign']).optional().describe('create/update. Whether new projects automatically get this template set as their default transactional/triggered/campaign email.'),
-          ...chamaileonInputSchema
+          ...chamaileonInputSchema,
+          ...chamaileonOutputSchema
         }
       },
       handler: async (args) => {
@@ -73,7 +74,7 @@ export function createTemplateTools ({ client, resolveIdOrRequired }) {
 
         if (args.action === 'get') {
           const template = await client.get(`/templates/${id}`)
-          return textResult(formatTemplateDetail(template))
+          return textResult(formatTemplateDetail(template) + await writeChamaileonDocument(template.document, args.chamaileonJsonOutputPath))
         }
 
         if (args.action === 'update') {

@@ -1,4 +1,7 @@
 import { describe, expect, test } from 'vitest'
+import fs from 'fs/promises'
+import os from 'os'
+import path from 'path'
 import { createTemplateTools } from './templates.js'
 import { createResolveId } from '../helpers/resolveId.js'
 import { createFakeClient } from '../helpers/fakeClient.js'
@@ -46,6 +49,18 @@ describe('manage_templates', () => {
 
     const result = await manageTemplates.handler({ action: 'get', templateName: 'Welcome' })
     expect(result.content[0].text).toBe('"Welcome" (id tmpl123) - subject: "Hi!", preview: "Glad you joined". Tags: onboarding. On new project creation: set-as-transactional.')
+  })
+
+  test('get saves the visual content to chamaileonJsonOutputPath', async () => {
+    const { client, manageTemplates } = setup()
+    const document = { body: { children: [] } }
+    client.get.mockResolvedValue({ _id: 'tmpl123', name: 'Welcome', subject: 'Hi!', document })
+    const outputPath = path.join(os.tmpdir(), `template-export-${Date.now()}.json`)
+
+    const result = await manageTemplates.handler({ action: 'get', templateId: 'tmpl123', chamaileonJsonOutputPath: outputPath })
+    expect(result.content[0].text).toBe(`"Welcome" (id tmpl123) - subject: "Hi!". Tags: none. On new project creation: do-nothing.\nSaved the Chamaileon JSON to: ${outputPath}`)
+    expect(JSON.parse(await fs.readFile(outputPath, 'utf8'))).toEqual(document)
+    await fs.rm(outputPath)
   })
 
   test('get reports no previewText, tags, or onProjectCreation gracefully', async () => {
@@ -160,7 +175,7 @@ describe('manage_templates with a Chamaileon JSON', () => {
     const result = await manageTemplates.handler({ action: 'create', name: 'Imported', subject: 'Hello', chamaileonJson })
 
     expect(client.get).not.toHaveBeenCalled()
-    expect(client.post).toHaveBeenCalledWith('/templates', { name: 'Imported', subject: 'Hello', document: { body: { children: [] } } })
+    expect(client.post).toHaveBeenCalledWith('/templates', { name: 'Imported', subject: 'Hello', document: expect.objectContaining({ body: expect.objectContaining({ type: 'body', children: [] }) }) })
     expect(result.content[0].text).toContain('Created template (from the uploaded Chamaileon JSON):')
   })
 
@@ -170,6 +185,6 @@ describe('manage_templates with a Chamaileon JSON', () => {
 
     await manageTemplates.handler({ action: 'update', templateId: 'tmpl123', chamaileonJson })
 
-    expect(client.patch).toHaveBeenCalledWith('/templates/tmpl123', { document: { body: { children: [] } } })
+    expect(client.patch).toHaveBeenCalledWith('/templates/tmpl123', { document: expect.objectContaining({ body: expect.objectContaining({ type: 'body', children: [] }) }) })
   })
 })

@@ -3,7 +3,7 @@ import { textResult } from '../helpers/errors.js'
 import { formatAutomationDetail, formatAutomationSummaryLine, formatTrigger, formatExitCriteria, listSteps, formatEmailStats } from './automationFormat.js'
 import { timelineInputSchema, buildStatsQuery, formatTimeline } from './statsTimeline.js'
 import { CONTACT_MERGE_TAGS } from './mergeTags.js'
-import { chamaileonInputSchema, readChamaileonDocument } from '../helpers/chamaileonDocument.js'
+import { chamaileonInputSchema, chamaileonOutputSchema, readChamaileonDocument, writeChamaileonDocument } from '../helpers/chamaileonDocument.js'
 
 const NODE_TYPES = ['delay', 'send-email', 'filter-audience', 'branch', 'complete', 'set-value', 'notify', 'manage-tags', 'webhook', 'condition']
 
@@ -447,6 +447,7 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           bodyType: z.enum(['html', 'text']).optional().describe('update only.'),
           body: z.string().optional().describe(`update only - HTML/text content (a Handlebars template string, supports {{unsubscribeLink}} and feed loops). For the visual (Chamaileon) editor, use chamaileonJsonPath/chamaileonJson instead. ${CONTACT_MERGE_TAGS}`),
           ...chamaileonInputSchema,
+          ...chamaileonOutputSchema,
           senderIdentityId: z.string().optional().describe('update only.'),
           replyTo: z.string().optional().describe('update only.'),
           feeds: FEED_SCHEMA.describe('update only - replaces the full feeds list. RSS/Atom/JSON feeds pulled into this email\'s body at send time (see the "body" field for how to reference a feed\'s variableName from the template). Only usable when bodyType is "html"/"text" (or was previously set) - not for the visual Chamaileon editor.'),
@@ -476,7 +477,7 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           const email = await client.get(`/automations/${automationId}/email/${args.emailId}`)
           const type = email.type || 'chamaileon'
           const feeds = email.feeds?.length ? `\nFeeds: ${email.feeds.map(f => `${f.variableName} (${f.feedType}, ${f.url})`).join(', ')}` : ''
-          return textResult(`"${email.subject || '(no subject yet)'}" (id ${email._id})\nPreview text: ${email.previewText || '(none)'}\nType: ${type}${type === 'chamaileon' ? '' : `\nBody:\n${email.document}`}${feeds}`)
+          return textResult(`"${email.subject || '(no subject yet)'}" (id ${email._id})\nPreview text: ${email.previewText || '(none)'}\nType: ${type}${type === 'chamaileon' ? '' : `\nBody:\n${email.document}`}${feeds}${await writeChamaileonDocument(email.document, args.chamaileonJsonOutputPath)}`)
         }
 
         const { result: preview } = await previewUnlessConfirmed({ client, resolveIdOrRequired, id: automationId, confirm: args.confirm, verb: 'updating this step\'s email content (subject, body, etc.)' })

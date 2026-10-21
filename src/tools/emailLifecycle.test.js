@@ -1,4 +1,7 @@
 import { describe, expect, test } from 'vitest'
+import { readFile, rm } from 'fs/promises'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import { createEmailLifecycleTools } from './emailLifecycle.js'
 import { createResolveId } from '../helpers/resolveId.js'
 import { createFakeClient } from '../helpers/fakeClient.js'
@@ -283,6 +286,34 @@ describe('get_email', () => {
     expect(text).toContain('Stats: 0 sent, 0 failed')
   })
 
+  test('saves the visual editor document to chamaileonJsonOutputPath', async () => {
+    const { client, get_email: getEmail } = setup()
+    const document = { body: { children: [] } }
+    client.get.mockImplementation(async path => {
+      if (path === '/campaigns/campaign123') {
+        return { _id: 'campaign123', name: 'Newsletter', subject: 'News', status: 'draft', document }
+      }
+      return { interval: 'daily', metric: 'opens', timeZone: 'UTC', from: '2026-10-01T00:00:00.000Z', to: '2026-10-01T23:59:59.999Z', buckets: [] }
+    })
+    const outputPath = join(tmpdir(), `email-export-${Date.now()}.json`)
+
+    const detail = await getEmail.handler({ type: 'campaign', emailId: 'campaign123', chamaileonJsonOutputPath: outputPath })
+    expect(detail.content[0].text).toMatch(new RegExp(`\\nSaved the Chamaileon JSON to: ${outputPath.replace(/\\/g, '\\\\')}$`))
+    expect(JSON.parse(await readFile(outputPath, 'utf8'))).toEqual(document)
+
+    const timeline = await getEmail.handler({ type: 'campaign', emailId: 'campaign123', interval: 'daily', metric: 'opens', chamaileonJsonOutputPath: outputPath })
+    expect(timeline.content[0].text).toMatch(/^"Newsletter" \(id campaign123\) - .*\nSaved the Chamaileon JSON to: /s)
+    await rm(outputPath)
+  })
+
+  test('refuses to save html/text content as Chamaileon JSON', async () => {
+    const { client, get_email: getEmail } = setup()
+    client.get.mockResolvedValue({ _id: 'email123', name: 'Plain', subject: 'Hi', type: 'html', document: '<p>Hi</p>' })
+
+    await expect(getEmail.handler({ type: 'transactional', emailId: 'email123', chamaileonJsonOutputPath: join(tmpdir(), 'never-written.json') }))
+      .rejects.toThrow('This content is html/text, not a visual editor (Chamaileon) document')
+  })
+
   test('notes a visual-editor (Chamaileon) document instead of dumping raw JSON', async () => {
     const { client, get_email: getEmail } = setup()
     client.get.mockImplementation(async path => {
@@ -295,7 +326,7 @@ describe('get_email', () => {
     const result = await getEmail.handler({ type: 'transactional', emailId: 'email123' })
     const text = result.content[0].text
 
-    expect(text).toContain('Body: visual editor (Chamaileon) document - not shown as text, use the app to view/edit it.')
+    expect(text).toContain('Body: visual editor (Chamaileon) document - not shown as text. Save it as a JSON file with chamaileonJsonOutputPath to edit it, or use the app editor.')
   })
 
   test('resolves by name when getting a single email', async () => {
@@ -506,7 +537,7 @@ describe('update_email with a Chamaileon JSON', () => {
 
     const result = await updateEmail.handler({ type: 'transactional', emailId: 'email123', chamaileonJson })
 
-    expect(client.patch).toHaveBeenCalledWith('/transactional-emails/email123', { type: 'chamaileon', document: { body: { children: [] } } })
+    expect(client.patch).toHaveBeenCalledWith('/transactional-emails/email123', { type: 'chamaileon', document: expect.objectContaining({ body: expect.objectContaining({ type: 'body', children: [] }) }) })
     expect(result.content[0].text).toContain('Body: visual editor (Chamaileon) document')
   })
 })

@@ -137,6 +137,6 @@ describe('create_triggered_email with a Chamaileon JSON', () => {
 
     await createTriggeredEmail.handler({ name: 'Welcome', subject: 'Hi', chamaileonJson, subscriberListId: 'list123' })
 
-    expect(client.post).toHaveBeenCalledWith('/triggered-emails', { name: 'Welcome', subject: 'Hi', subscriberListId: 'list123', document: { body: { children: [] } } })
+    expect(client.post).toHaveBeenCalledWith('/triggered-emails', { name: 'Welcome', subject: 'Hi', subscriberListId: 'list123', document: expect.objectContaining({ body: expect.objectContaining({ type: 'body', children: [] }) }) })
   })
 })

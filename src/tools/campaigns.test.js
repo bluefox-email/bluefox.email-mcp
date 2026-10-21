@@ -150,7 +150,7 @@ describe('create_campaign with a Chamaileon JSON', () => {
       subject: 'Big discounts',
       timeZone: 'UTC',
       subscriberListId: 'list123',
-      document: { body: { children: [] } }
+      document: expect.objectContaining({ body: expect.objectContaining({ type: 'body', children: [] }) })
     })
   })
 

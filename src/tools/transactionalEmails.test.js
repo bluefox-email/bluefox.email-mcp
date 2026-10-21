@@ -121,6 +121,6 @@ describe('create_transactional_email with a Chamaileon JSON', () => {
 
     await createTransactionalEmail.handler({ name: 'Order Confirmation', subject: 'Your order', chamaileonJson })
 
-    expect(client.post).toHaveBeenCalledWith('/transactional-emails', { name: 'Order Confirmation', subject: 'Your order', document: { body: { children: [] } } })
+    expect(client.post).toHaveBeenCalledWith('/transactional-emails', { name: 'Order Confirmation', subject: 'Your order', document: expect.objectContaining({ body: expect.objectContaining({ type: 'body', children: [] }) }) })
   })
 })
