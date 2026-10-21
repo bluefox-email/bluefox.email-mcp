@@ -3,6 +3,7 @@ import { textResult } from '../helpers/errors.js'
 import { formatAutomationDetail, formatAutomationSummaryLine, formatTrigger, formatExitCriteria, listSteps, formatEmailStats } from './automationFormat.js'
 import { timelineInputSchema, buildStatsQuery, formatTimeline } from './statsTimeline.js'
 import { CONTACT_MERGE_TAGS } from './mergeTags.js'
+import { chamaileonInputSchema, chamaileonOutputSchema, readChamaileonDocument, writeChamaileonDocument } from '../helpers/chamaileonDocument.js'
 
 const NODE_TYPES = ['delay', 'send-email', 'filter-audience', 'branch', 'complete', 'set-value', 'notify', 'manage-tags', 'webhook', 'condition']
 
@@ -337,7 +338,7 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           subject: z.string().optional().describe('update only, send-email/notify - see this tool\'s description for when this applies instead of manage_automation_email_content.'),
           previewText: z.string().optional().describe('update only, send-email/notify - inbox preview text.'),
           bodyType: z.enum(['html', 'text']).optional().describe('update only, send-email/notify. Omit to keep using the visual (Chamaileon) editor.'),
-          body: z.string().optional().describe(`update only, send-email/notify - HTML/text content (a Handlebars template string, supports {{unsubscribeLink}} and feed loops), only when bodyType is set. This tool cannot author the visual (Chamaileon) editor format. ${CONTACT_MERGE_TAGS}`),
+          body: z.string().optional().describe(`update only, send-email/notify - HTML/text content (a Handlebars template string, supports {{unsubscribeLink}} and feed loops), only when bodyType is set. To upload a visual (Chamaileon) editor JSON, use manage_automation_email_content. ${CONTACT_MERGE_TAGS}`),
           senderIdentityId: z.string().optional().describe('update only, send-email/notify.'),
           replyTo: z.string().optional().describe('update only, send-email/notify.'),
           trackOpens: z.boolean().optional().describe('Defaults to true. Set false to stop adding the open-tracking pixel to this email (opens are not recorded). Update only, send-email.'),
@@ -452,7 +453,9 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           subject: z.string().optional().describe('update only.'),
           previewText: z.string().optional().describe('update only - inbox preview text, meaningfully affects open rates.'),
           bodyType: z.enum(['html', 'text']).optional().describe('update only.'),
-          body: z.string().optional().describe(`update only - HTML/text content (a Handlebars template string, supports {{unsubscribeLink}} and feed loops). This tool cannot author the visual (Chamaileon) editor format. ${CONTACT_MERGE_TAGS}`),
+          body: z.string().optional().describe(`update only - HTML/text content (a Handlebars template string, supports {{unsubscribeLink}} and feed loops). For the visual (Chamaileon) editor, use chamaileonJsonPath/chamaileonJson instead. ${CONTACT_MERGE_TAGS}`),
+          ...chamaileonInputSchema,
+          ...chamaileonOutputSchema,
           senderIdentityId: z.string().optional().describe('update only.'),
           replyTo: z.string().optional().describe('update only.'),
           trackOpens: z.boolean().optional().describe('Defaults to true. Set false to stop adding the open-tracking pixel to this email (opens are not recorded). Update only.'),
@@ -486,7 +489,7 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           const feeds = email.feeds?.length ? `\nFeeds: ${email.feeds.map(f => `${f.variableName} (${f.feedType}, ${f.url})`).join(', ')}` : ''
           return textResult(`"${email.subject || '(no subject yet)'}" (id ${email._id})\nPreview text: ${email.previewText || '(none)'}\nType: ${type}
 Open tracking: ${email.trackOpens !== false ? 'on' : 'off'}
-Click tracking: ${email.trackClicks !== false ? 'on' : 'off'}${type === 'chamaileon' ? '' : `\nBody:\n${email.document}`}${feeds}`)
+Click tracking: ${email.trackClicks !== false ? 'on' : 'off'}${type === 'chamaileon' ? '' : `\nBody:\n${email.document}`}${feeds}${await writeChamaileonDocument(email.document, args.chamaileonJsonOutputPath)}`)
         }
 
         const { result: preview } = await previewUnlessConfirmed({ client, resolveIdOrRequired, id: automationId, confirm: args.confirm, verb: 'updating this step\'s email content (subject, body, etc.)' })
@@ -521,6 +524,11 @@ Click tracking: ${email.trackClicks !== false ? 'on' : 'off'}${type === 'chamail
         }
         if (args.feeds !== undefined) {
           body.feeds = args.feeds
+        }
+        const chamaileonDocument = await readChamaileonDocument(args)
+        if (chamaileonDocument) {
+          body.type = 'chamaileon'
+          body.document = chamaileonDocument
         }
 
         const result = await client.patch(`/automations/${automationId}/email/${args.emailId}`, body)

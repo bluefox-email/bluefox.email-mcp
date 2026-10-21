@@ -3,6 +3,7 @@ import { textResult } from '../helpers/errors.js'
 import { normalizeScheduledFor } from '../helpers/scheduledFor.js'
 import { feedsSchema } from './feedsSchema.js'
 import { CONTACT_MERGE_TAGS, WEB_VERSION_MERGE_TAG } from './mergeTags.js'
+import { chamaileonInputSchema, chamaileonOutputSchema, readChamaileonDocument, writeChamaileonDocument } from '../helpers/chamaileonDocument.js'
 import { rangeInputSchema, timelineInputSchema, buildStatsQuery, formatTimeline } from './statsTimeline.js'
 
 const RESOURCE_PATH = {
@@ -29,7 +30,7 @@ export function formatEmailDetail (type, detail, stats) {
   if (typeof detail.document === 'string') {
     lines.push(`Body:\n${detail.document}`)
   } else if (detail.document) {
-    lines.push('Body: visual editor (Chamaileon) document - not shown as text, use the app to view/edit it.')
+    lines.push('Body: visual editor (Chamaileon) document - not shown as text. Save it as a JSON file with chamaileonJsonOutputPath to edit it, or use the app editor.')
   }
   if (type === 'campaign') {
     lines.push(`Status: ${detail.status}${detail.scheduledTo ? `, scheduled for ${detail.scheduledTo} (time zone: ${detail.timeZone || 'UTC'})` : ''}`)
@@ -92,6 +93,7 @@ export function createEmailLifecycleTools ({ client, resolveId, resolveIdOptiona
           subject: z.string().optional(),
           body: z.string().optional().describe(`Replaces the email body (a Handlebars template string). ${CONTACT_MERGE_TAGS} ${WEB_VERSION_MERGE_TAG}`),
           bodyType: z.enum(['html', 'text']).optional().describe('Switches the body between plain html/text authoring. Omit to keep using the visual (Chamaileon) editor document - only set this alongside body when authoring as html/text.'),
+          ...chamaileonInputSchema,
           previewText: z.string().optional(),
           senderIdentityId: z.string().optional(),
           senderIdentityEmail: z.string().optional().describe('Looked up automatically.'),
@@ -119,6 +121,11 @@ export function createEmailLifecycleTools ({ client, resolveId, resolveIdOptiona
         }
         if (args.subject) {
           body.subject = args.subject
+        }
+        const chamaileonDocument = await readChamaileonDocument(args)
+        if (chamaileonDocument) {
+          body.type = 'chamaileon'
+          body.document = chamaileonDocument
         }
         if (args.body) {
           body.document = args.body
@@ -208,7 +215,8 @@ export function createEmailLifecycleTools ({ client, resolveId, resolveIdOptiona
           emailId: z.string().optional(),
           emailName: z.string().optional().describe('Omit both this and emailId to list every email of this type instead.'),
           ...rangeInputSchema,
-          ...timelineInputSchema
+          ...timelineInputSchema,
+          ...chamaileonOutputSchema
         }
       },
       handler: async (args) => {
@@ -228,10 +236,11 @@ export function createEmailLifecycleTools ({ client, resolveId, resolveIdOptiona
           client.get(`${resourcePath}/${id}`),
           client.get(`${resourcePath}/${id}/stats`, buildStatsQuery(args))
         ])
+        const saved = await writeChamaileonDocument(detail.document, args.chamaileonJsonOutputPath)
         if (args.interval || args.metric) {
-          return textResult(`"${detail.name}" (id ${detail._id}) - ${formatTimeline(stats)}`)
+          return textResult(`"${detail.name}" (id ${detail._id}) - ${formatTimeline(stats)}${saved}`)
         }
-        return textResult(formatEmailDetail(args.type, detail, stats))
+        return textResult(formatEmailDetail(args.type, detail, stats) + saved)
       }
     },
     {

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Tool names and input schemas are the public API: removing/renaming a tool or param,
 or making a param required, is a breaking change.
 
+## [0.3.0] - 2026-10-22
+
+### Added
+- `create_campaign`, `create_transactional_email`, `create_triggered_email`, `update_email`, `manage_automation_email_content` (update): `chamaileonJsonPath` (a local file) or `chamaileonJson` (inline) to upload a Chamaileon visual editor JSON instead of an html/text `body`. The email opens in the app's drag-and-drop editor. On updates this switches an html/text email back to the visual editor.
+- `manage_templates`: `create` can upload a Chamaileon JSON instead of copying a source template, and `update` can replace a template's visual content with one.
+- An uploaded Chamaileon JSON can be short and hand-written: any eid and style/attrs key a block leaves out gets the editor's default. The `chamaileonJson` description shows agents the format.
+- `get_email`, `manage_templates` (get), `manage_automation_email_content` (get): `chamaileonJsonOutputPath` saves the visual editor JSON to a file, to edit it and upload it again.
+
+### Changed
+- `body` on `create_campaign`, `create_transactional_email` and `create_triggered_email` is now optional. It is still required unless a Chamaileon JSON is given.
+
 ## [0.2.4] - 2026-10-21
 
 ### Added
@@ -49,6 +60,7 @@ First versioned release. Changes before this version are not tracked here.
 ### Added
 - `list_contacts`: list and filter contacts by subscriber list, saved segment (name or id), tags and contact fields.
 
+[0.3.0]: https://github.com/bluefox-email/bluefox.email-mcp/releases/tag/v0.3.0
 [0.2.3]: https://github.com/bluefox-email/bluefox.email-mcp/releases/tag/v0.2.3
 [0.2.2]: https://github.com/bluefox-email/bluefox.email-mcp/releases/tag/v0.2.2
 [0.2.1]: https://github.com/bluefox-email/bluefox.email-mcp/releases/tag/v0.2.1
