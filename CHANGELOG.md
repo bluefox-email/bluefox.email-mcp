@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Tool names and input schemas are the public API: removing/renaming a tool or param,
 or making a param required, is a breaking change.
 
+## [0.2.5] - 2026-10-28
+
+### Changed
+- `create_signup_form`, `update_signup_form`, `create_subscriber_list`, `update_subscriber_list`: the `doubleOptInRedirectLink` description explains the `?token=` the API now adds to that redirect. The token is read-only and valid for 7 days, and a thank-you page can use it to load the contact and list data.
+
 ## [0.2.4] - 2026-10-21
 
 ### Added
