@@ -23,6 +23,8 @@ export function createTriggeredEmailTools ({ client, resolveIdOrRequired, resolv
           senderIdentityEmail: z.string().optional().describe('Looked up automatically.'),
           replyTo: z.string().optional().describe('Reply-to email address recipients\' replies go to. Defaults to the sender identity\'s own email if omitted.'),
           excludeUnengaged: z.boolean().optional(),
+          trackOpens: z.boolean().optional().describe('Defaults to true. Set false to stop adding the open-tracking pixel to this email (opens are not recorded).'),
+          trackClicks: z.boolean().optional().describe('Defaults to true. Set false to send links as-is instead of through the click tracker (clicks are not recorded).'),
           feeds: feedsSchema.optional()
         }
       },
@@ -60,6 +62,12 @@ export function createTriggeredEmailTools ({ client, resolveIdOrRequired, resolv
         }
         if (args.excludeUnengaged !== undefined) {
           body.excludeUnengaged = args.excludeUnengaged
+        }
+        if (args.trackOpens !== undefined) {
+          body.trackOpens = args.trackOpens
+        }
+        if (args.trackClicks !== undefined) {
+          body.trackClicks = args.trackClicks
         }
         if (args.feeds) {
           body.feeds = args.feeds

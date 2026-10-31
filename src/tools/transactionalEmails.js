@@ -20,6 +20,8 @@ export function createTransactionalEmailTools ({ client, resolveIdOrRequired, re
           senderIdentityId: z.string().optional(),
           senderIdentityEmail: z.string().optional().describe('The sender identity to send from, by its email address - looked up automatically.'),
           replyTo: z.string().optional().describe('Reply-to email address recipients\' replies go to. Defaults to the sender identity\'s own email if omitted.'),
+          trackOpens: z.boolean().optional().describe('Defaults to true. Set false to stop adding the open-tracking pixel to this email (opens are not recorded).'),
+          trackClicks: z.boolean().optional().describe('Defaults to true. Set false to send links as-is instead of through the click tracker (clicks are not recorded).'),
           feeds: feedsSchema.optional()
         }
       },
@@ -46,6 +48,12 @@ export function createTransactionalEmailTools ({ client, resolveIdOrRequired, re
         }
         if (args.replyTo) {
           body.replyTo = args.replyTo
+        }
+        if (args.trackOpens !== undefined) {
+          body.trackOpens = args.trackOpens
+        }
+        if (args.trackClicks !== undefined) {
+          body.trackClicks = args.trackClicks
         }
         if (args.feeds) {
           body.feeds = args.feeds

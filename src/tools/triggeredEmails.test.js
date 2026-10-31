@@ -55,7 +55,9 @@ describe('create_triggered_email', () => {
       previewText: 'Glad you joined',
       senderIdentityEmail: 'hello@example.com',
       replyTo: 'support@example.com',
-      excludeUnengaged: true
+      excludeUnengaged: true,
+      trackOpens: false,
+      trackClicks: false
     })
 
     expect(client.post).toHaveBeenCalledWith('/triggered-emails', {
@@ -67,7 +69,9 @@ describe('create_triggered_email', () => {
       previewText: 'Glad you joined',
       senderIdentity: 'sender123',
       replyTo: 'support@example.com',
-      excludeUnengaged: true
+      excludeUnengaged: true,
+      trackOpens: false,
+      trackClicks: false
     })
   })
 

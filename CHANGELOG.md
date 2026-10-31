@@ -7,10 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Tool names and input schemas are the public API: removing/renaming a tool or param,
 or making a param required, is a breaking change.
 
-## [0.3.0] - 2026-10-21
+## [0.3.0] - 2026-11-01
 
 ### Added
 - Segment conditions (`manage_segment`, `list_contacts`, project unengaged segment): two future date operators, `date-in-next` (date within the next N days) and `date-more-than-ahead` (date more than N days from now), for date fields like renewal or trial end dates.
+
+## [0.2.4] - 2026-10-21
+
+### Added
+- `create_campaign`, `create_transactional_email`, `create_triggered_email`, `update_email`, `manage_automation_email_content` (update) and `manage_automation_node` (send-email update): `trackOpens` / `trackClicks` turn open and click tracking on or off per email (both on by default).
+- `get_email` and `manage_automation_email_content` (get) show "Open tracking: on/off" and "Click tracking: on/off".
 
 ## [0.2.3] - 2026-10-20
 

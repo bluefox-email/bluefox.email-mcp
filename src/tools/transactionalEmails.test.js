@@ -41,7 +41,9 @@ describe('create_transactional_email', () => {
       bodyType: 'html',
       previewText: 'Your order has shipped',
       senderIdentityEmail: 'orders@example.com',
-      replyTo: 'support@example.com'
+      replyTo: 'support@example.com',
+      trackOpens: false,
+      trackClicks: false
     })
 
     expect(client.post).toHaveBeenCalledWith('/transactional-emails', {
@@ -51,7 +53,9 @@ describe('create_transactional_email', () => {
       document: 'Thanks!',
       previewText: 'Your order has shipped',
       senderIdentity: 'sender123',
-      replyTo: 'support@example.com'
+      replyTo: 'support@example.com',
+      trackOpens: false,
+      trackClicks: false
     })
   })
 
