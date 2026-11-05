@@ -6,14 +6,14 @@ import { ResolveError } from './errors.js'
 export const chamaileonInputSchema = {
   chamaileonJsonPath: z.string().optional().describe('A path to a Chamaileon (visual editor) JSON file on this machine, e.g. one you wrote (see chamaileonJson for the format), exported from Chamaileon, or a whole copied bluefox.email email/template record (its "document" is used, the other fields are ignored) - uploaded as the visual editor document, editable in the app\'s drag-and-drop editor. Pass the path directly, do not read the file yourself. Use instead of body.'),
   chamaileonJson: z.string().optional().describe('The same Chamaileon JSON document as chamaileonJsonPath, given inline as a JSON string. Prefer chamaileonJsonPath for a file - only use this when the JSON is not saved anywhere. ' +
-    'To design one yourself: {"body":{"style":{"backgroundColor":"#f4f4f4"},"children":[sections]}}. A section is {"type":"fullwidth","style":{"contentBackgroundColor":"#ffffff","contentPaddingTop":"20px",...},"children":[blocks]} (600px wide). ' +
-    'Blocks: {"type":"text","attrs":{"text":"<h1>..</h1><p style=\\"text-align: center;\\">..</p>"},"style":{"paragraphFontFamily":"Verdana, Geneva, sans-serif","paragraphColor":"#333333","paragraphFontSize":"16px","linkColor":"#0094c5","h1FontFamily":"Georgia, serif","h1Color":"#111111"}} ' +
+    'To design one yourself: {"body":{"style":{"backgroundColor":"#f4f4f4"},"children":[fullwidth elements]}}. A fullwidth element is {"type":"fullwidth","style":{"contentBackgroundColor":"#ffffff","contentPaddingTop":"20px",...},"children":[elements]} (600px wide). ' +
+    'Elements inside it: {"type":"text","attrs":{"text":"<h1>..</h1><p style=\\"text-align: center;\\">..</p>"},"style":{"paragraphFontFamily":"Verdana, Geneva, sans-serif","paragraphColor":"#333333","paragraphFontSize":"16px","linkColor":"#0094c5","h1FontFamily":"Georgia, serif","h1Color":"#111111"}} ' +
     '(also h2/h3 FontFamily, Color, FontSize - set link colors here, an inline color on <a> is overridden), ' +
     '{"type":"button","attrs":{"text":"<p>Shop</p>","href":"https://.."},"style":{"backgroundColor":"#0094c5"}}, ' +
     '{"type":"image","attrs":{"src":"https://..","altText":"..","link":""},"style":{"width":"560px","maxWidth":"560px"}}, {"type":"divider"}, ' +
     '{"type":"social","attrs":{"elements":[{"type":"Facebook","link":"https://..","src":"img/Facebook/fb-3-colorful.png"}]}} (also Linkedin li, Instagram ig, Twitter tw, YouTube YT), ' +
-    '{"type":"box","style":{"backgroundColor":"..","paddingTop":"16px","borderRadius":"8px"},"children":[blocks]}, ' +
-    'and columns {"type":"multicolumn","children":[{"type":"column","style":{"width":"280px"},"children":[blocks]}, ...]} (widths add up to the space available). ' +
+    '{"type":"box","style":{"backgroundColor":"..","paddingTop":"16px","borderRadius":"8px"},"children":[elements]}, ' +
+    'and columns {"type":"multicolumn","children":[{"type":"column","style":{"width":"280px"},"children":[elements]}, ...]} (widths add up to the space available). ' +
     'Style values are CSS strings with px units; any eid and style/attrs key left out gets the editor\'s default, so only set what you want to change. Merge tags like {{contact.name}} and {{unsubscribeLink}} work in text and links.')
 }
 
@@ -36,7 +36,7 @@ function boxModel (prefix = '', padding = '0px', margin = '0px') {
 
 const HIDE = { hideOnMobile: false, hideOnDesktop: false, hideInAmp: false }
 
-// What the Chamaileon editor itself writes for a new block - merged under whatever the given JSON sets, so an
+// What the Chamaileon editor itself writes for a new element - merged under whatever the given JSON sets, so an
 // agent can write just the keys it cares about (type, children, attrs.text, ...) and still get a complete document.
 const BLOCK_DEFAULTS = {
   body: { attrs: {}, style: { ...background(), backgroundColor: '#FFFFFF', bodyWidth: 600 }, version: '4.1.0' },
