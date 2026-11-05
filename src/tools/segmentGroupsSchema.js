@@ -6,13 +6,13 @@ const OPERATORS = [
   'greater-than', 'greater-than-or-equal', 'less-than', 'less-than-or-equal',
   'has-tag', 'does-not-have-tag',
   'opened', 'not-opened', 'clicked', 'not-clicked', 'received', 'not-received',
-  'date-equals', 'date-before', 'date-after', 'date-in-last', 'date-more-than'
+  'date-equals', 'date-before', 'date-after', 'date-in-last', 'date-more-than', 'date-in-next', 'date-more-than-ahead'
 ]
 
 const conditionSchema = z.object({
   category: z.enum(['contact-property', 'engagement']).optional().describe('Defaults to "contact-property". Use "engagement" for opened/clicked/received conditions - those have no property field.'),
   property: z.string().optional().describe('A custom contact field name (see get_contact/manage_contact_fields_and_tags for the registered names), or "createdAt". Required unless operator is "any", a tag operator, or category is "engagement".'),
-  operator: z.enum(OPERATORS).optional().describe('Defaults to "any" (matches everyone).'),
+  operator: z.enum(OPERATORS).optional().describe('Defaults to "any" (matches everyone). Day-count date operators take a number of days as value: date-in-last (within the last N days), date-more-than (more than N days ago), date-in-next (within the next N days), date-more-than-ahead (more than N days from now).'),
   value: z.any().optional().describe('Comparison value - type depends on the operator/property (string, number, boolean, or a date string).')
 })
 
