@@ -492,9 +492,11 @@ Open tracking: ${email.trackOpens !== false ? 'on' : 'off'}
 Click tracking: ${email.trackClicks !== false ? 'on' : 'off'}${type === 'chamaileon' ? '' : `\nBody:\n${email.document}`}${feeds}${await writeChamaileonDocument(email.document, args.chamaileonJsonOutputPath)}`)
         }
 
+        const chamaileonDocument = await readChamaileonDocument(args)
+        const unsubscribeWarning = missingUnsubscribeWarning(chamaileonDocument)
         const { result: preview } = await previewUnlessConfirmed({ client, resolveIdOrRequired, id: automationId, confirm: args.confirm, verb: 'updating this step\'s email content (subject, body, etc.)' })
         if (preview) {
-          return preview
+          return textResult(preview.content[0].text + unsubscribeWarning)
         }
 
         const body = {}
@@ -525,7 +527,6 @@ Click tracking: ${email.trackClicks !== false ? 'on' : 'off'}${type === 'chamail
         if (args.feeds !== undefined) {
           body.feeds = args.feeds
         }
-        const chamaileonDocument = await readChamaileonDocument(args)
         if (chamaileonDocument) {
           body.type = 'chamaileon'
           body.document = chamaileonDocument
@@ -533,9 +534,9 @@ Click tracking: ${email.trackClicks !== false ? 'on' : 'off'}${type === 'chamail
 
         const result = await client.patch(`/automations/${automationId}/email/${args.emailId}`, body)
         if (result.automationId === undefined) {
-          return textResult(`Staged the email content change (not live until merged):\n\n${formatAutomationDetail(result)}${missingUnsubscribeWarning(chamaileonDocument)}`)
+          return textResult(`Staged the email content change (not live until merged):\n\n${formatAutomationDetail(result)}${unsubscribeWarning}`)
         }
-        return textResult(`Updated email content:\n"${result.subject}" (id ${result._id})${missingUnsubscribeWarning(chamaileonDocument)}`)
+        return textResult(`Updated email content:\n"${result.subject}" (id ${result._id})${unsubscribeWarning}`)
       }
     },
     {

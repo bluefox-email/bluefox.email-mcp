@@ -676,6 +676,21 @@ describe('manage_automation_email_content', () => {
     expect(result.content[0].text).toContain('Staged the email content change (not live until merged)')
   })
 
+  test('update preview warns about a missing unsubscribe link before anything is applied', async () => {
+    const { client, byName } = setup()
+    client.get.mockResolvedValue({ _id: 'auto1', name: 'Onboarding', status: 'live', nodes: [] })
+    const args = { action: 'update', automationId: 'auto1', emailId: 'email1' }
+
+    const missing = await byName.manage_automation_email_content.handler({ ...args, chamaileonJson: JSON.stringify({ body: { children: [] } }) })
+    const present = await byName.manage_automation_email_content.handler({ ...args, chamaileonJson: JSON.stringify({ body: { attrs: { text: '{{unsubscribeLink}}' } } }) })
+
+    expect(missing.content[0].text).toContain('Not yet applied')
+    expect(missing.content[0].text).toContain('Warning: this design has no {{unsubscribeLink}}')
+    expect(present.content[0].text).toContain('Not yet applied')
+    expect(present.content[0].text).not.toContain('Warning')
+    expect(client.patch).not.toHaveBeenCalled()
+  })
+
   test('update warns when an uploaded Chamaileon JSON has no unsubscribe link, whether live or staged', async () => {
     const { client, byName } = setup()
     const args = { action: 'update', automationId: 'auto1', emailId: 'email1', chamaileonJson: JSON.stringify({ body: { children: [] } }), confirm: true }
