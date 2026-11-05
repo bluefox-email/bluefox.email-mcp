@@ -11,9 +11,15 @@ export const chamaileonInputSchema = {
     '(also h2/h3 FontFamily, Color, FontSize - set link colors here, an inline color on <a> is overridden), ' +
     '{"type":"button","attrs":{"text":"<p>Shop</p>","href":"https://.."},"style":{"backgroundColor":"#0094c5"}}, ' +
     '{"type":"image","attrs":{"src":"https://..","altText":"..","link":""},"style":{"width":"560px","maxWidth":"560px"}}, {"type":"divider"}, ' +
-    '{"type":"social","attrs":{"elements":[{"type":"Facebook","link":"https://..","src":"img/Facebook/fb-3-colorful.png"}]}} (also Linkedin li, Instagram ig, Twitter tw, YouTube YT), ' +
+    '{"type":"social","attrs":{"elements":[{"type":"Facebook","link":"https://.."}],"color":"colorful","iconSet":3}} (networks: Blogger, Facebook, Instagram, Linkedin, Medium, Pinterest, Snapchat, SoundCloud, Spotify, Telegram, TikTok, Tumblr, Twitter, Vimeo, Vkontakte, WeChat, YouTube; color colorful, black, grey or white; iconSet 1-5; the icon src is filled in for you), ' +
     '{"type":"box","style":{"backgroundColor":"..","paddingTop":"16px","borderRadius":"8px"},"children":[elements]}, ' +
-    'and columns {"type":"multicolumn","children":[{"type":"column","style":{"width":"280px"},"children":[elements]}, ...]} (widths add up to the space available). ' +
+    'columns {"type":"multicolumn","children":[{"type":"column","style":{"width":"280px"},"children":[elements]}, ...]} (widths add up to the space available), ' +
+    '{"type":"typed-text","attrs":{"text":"Plain text"},"style":{"subType":"heading1","fontSize":"32px","color":"#111111","fontFamily":"Georgia, serif","align":"center","bold":true}} (subType paragraph, heading1-3 or list; takes plain text and its own style, while text takes HTML), ' +
+    '{"type":"code","attrs":{"title":"Custom HTML","content":"<div style=\\"font-size:16px\\">..</div>"}} (raw HTML, it must set its own font-size), {"type":"dynamic-image","attrs":{"src":"{{this.image.url}}","altText":".."},"style":{"width":"150px","height":"150px"}} (image URL from a merge tag), ' +
+    '{"type":"video","attrs":{"videoId":"..","videoProvider":"youtube","link":"https://.."}} (thumbnail generated from the videoId; not in the app editor\'s toolbox). ' +
+    'Personalization: {"type":"loop","attrs":{"expression":"news.item limit=5 skip=0"},"children":[elements]} repeats its children per feed item (use {{this.title}} inside; add the feed with the feeds param), and {"type":"conditional","children":[{"type":"branch","attrs":{"type":"if","expression":"(EQ contact.plan \\"pro\\")"},"children":[elements]},{"type":"branch","attrs":{"type":"else"},"children":[elements]}]} (branch type if, else-if or else). block-level-loop and block-level-conditional work the same but sit directly in body and wrap whole fullwidth elements. ' +
+    'Nesting: body holds only fullwidth and block-level-*; fullwidth, box, column, loop and branch hold elements; multicolumn holds only column; conditional holds only branch. ' +
+    'Colors, fonts and images can use a design system variable, e.g. "color":{"reference":"name","default":"#111111"} (see manage_design_system). ' +
     'Style values are CSS strings with px units; any eid and style/attrs key left out gets the editor\'s default, so only set what you want to change. Merge tags like {{contact.name}} and {{unsubscribeLink}} work in text and links.')
 }
 
@@ -79,7 +85,36 @@ const BLOCK_DEFAULTS = {
   social: {
     attrs: { elements: [], align: 'center', color: 'colorful', iconSet: 3, size: 32, layout: 'horizontal', spacing: 10, ...HIDE, reorderOnMobile: false, baseUrl: 'https://cdn.chamaileon.io/assets/' },
     style: {}
-  }
+  },
+  'typed-text': {
+    attrs: { text: '' },
+    style: { subType: 'paragraph', ...background(), paddingLeft: '10px', paddingBottom: '5px', paddingRight: '10px', paddingTop: '5px', lineHeight: '25px', letterSpacing: 'normal', color: '#131313', fontSize: '18px', fontFamily: 'Arial, Helvetica Neue, Helvetica, sans-serif', linkTextDecoration: 'underline', linkColor: '#00c0e7', listMarkerType: 'disc', listMarkerFontSize: '18px', listMarkerColor: '#131313', listMarkerFontFamily: 'Arial, Helvetica Neue, Helvetica, sans-serif', lineSpacing: '0px', align: 'left', bold: false, italic: false, underline: false }
+  },
+  'dynamic-image': {
+    attrs: { title: '', link: '', altText: '', src: '' },
+    style: { align: 'center', fullWidthOnMobile: false, maxHeight: '300px', maxWidth: '300px', width: '150px', height: '150px', ...background(), ...boxModel() }
+  },
+  video: {
+    attrs: { link: '', altText: '', videoId: '', videoProvider: '', previewBaseUrl: 'https://video.chamaileon.io/thumbnail/original/', thumbnailBaseUrl: 'https://video.chamaileon.io/thumbnail/generated/', src: '' },
+    style: { align: 'center', iconColor: '#FF0000', iconSize: '50px', iconType: 'youtube', lockedWidth: null, lockedHeight: null, maxHeight: '338px', maxWidth: '600px', width: '600px', ...background(), ...boxModel() }
+  },
+  code: { attrs: { title: 'Your title', content: '', style: '', isAmp: false }, style: {}, placeholder: {} },
+  loop: { attrs: { expression: 'dummy_expression' }, style: {} },
+  conditional: { attrs: {}, style: {} },
+  branch: { attrs: { expression: 'dummy_expression', type: 'if' }, style: {} },
+  'block-level-loop': { attrs: { lock: false, expression: 'dummy_expression' }, style: {} },
+  'block-level-conditional': { attrs: { lock: false }, style: {} }
+}
+
+const SOCIAL_ICON_PREFIXES = { Blogger: 'BL', Facebook: 'fb', Instagram: 'ig', Linkedin: 'li', Medium: 'ME', Pinterest: 'PT', Snapchat: 'SN', SoundCloud: 'SC', Spotify: 'SP', Telegram: 'TG', TikTok: 'tt', Tumblr: 'TU', Twitter: 'tw', Vimeo: 'VI', Vkontakte: 'VK', WeChat: 'WC', YouTube: 'YT' }
+
+// The icon file depends on the network, icon set and color - an element that gives its own src keeps it
+function fillSocialIcons (attrs) {
+  const elements = attrs.elements.map(element => {
+    const prefix = SOCIAL_ICON_PREFIXES[element.type]
+    return prefix ? { src: `img/${element.type}/${prefix}-${attrs.iconSet}-${attrs.color}.png`, ...element } : element
+  })
+  return { ...attrs, elements }
 }
 
 function fillBlockDefaults (block) {
@@ -91,6 +126,9 @@ function fillBlockDefaults (block) {
     if (!block.style?.reference) {
       filled.style = { ...defaults.style, ...block.style }
     }
+  }
+  if (block.type === 'social') {
+    filled.attrs = fillSocialIcons(filled.attrs)
   }
   if (Array.isArray(block.children)) {
     filled.children = block.children.map(fillBlockDefaults)

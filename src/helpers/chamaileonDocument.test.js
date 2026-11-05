@@ -115,9 +115,9 @@ describe('filling in the editor defaults', () => {
     ])
   })
 
-  test('leaves design-system linked styles and unknown block types alone', async () => {
+  test('leaves design-system linked styles and unknown element types alone', async () => {
     const linkedStyle = { reference: 'Primary button', modified: false, value: {}, default: { color: '#ffffff' } }
-    const written = { body: { children: [{ type: 'block-level-loop', children: [{ type: 'button', style: linkedStyle }] }] } }
+    const written = { body: { children: [{ type: 'some-future-element', children: [{ type: 'button', style: linkedStyle }] }] } }
 
     const [loop] = (await readChamaileonDocument({ chamaileonJson: JSON.stringify(written) })).body.children
 
@@ -126,6 +126,62 @@ describe('filling in the editor defaults', () => {
     expect(loop.customData).toEqual({})
     expect(loop.children[0].style).toEqual(linkedStyle)
     expect(loop.children[0].attrs).toMatchObject({ href: '' })
+  })
+})
+
+describe('filling in the advanced Chamaileon elements', () => {
+  async function fill (children) {
+    return (await readChamaileonDocument({ chamaileonJson: JSON.stringify({ body: { children } }) })).body.children
+  }
+
+  test('fills typed-text, dynamic-image, video and code', async () => {
+    const [typed, dynamic, video, code] = await fill([
+      { type: 'typed-text', attrs: { text: 'Title' }, style: { subType: 'heading1', bold: true } },
+      { type: 'dynamic-image', attrs: { src: '{{logoUrl}}' } },
+      { type: 'video', attrs: { videoId: 'abc', videoProvider: 'youtube' } },
+      { type: 'code', attrs: { content: '<b>Hi</b>' } }
+    ])
+
+    expect(typed).toMatchObject({ attrs: { text: 'Title' }, style: { subType: 'heading1', bold: true, italic: false, fontSize: '18px', paddingTop: '5px', lineSpacing: '0px' } })
+    expect(dynamic).toMatchObject({ attrs: { src: '{{logoUrl}}', altText: '' }, style: { width: '150px', height: '150px', borderRadius: '0px', paddingTop: '0px' } })
+    expect(video).toMatchObject({ attrs: { videoId: 'abc', thumbnailBaseUrl: 'https://video.chamaileon.io/thumbnail/generated/' }, style: { iconType: 'youtube', width: '600px' } })
+    expect(code).toMatchObject({ attrs: { title: 'Your title', content: '<b>Hi</b>', isAmp: false }, style: {}, placeholder: {} })
+  })
+
+  test('fills loops, conditionals and branches at both levels, including their children', async () => {
+    const [blockLoop, blockConditional] = await fill([
+      { type: 'block-level-loop', attrs: { expression: 'news.item limit=5' }, children: [{ type: 'fullwidth', children: [{ type: 'loop', attrs: { expression: 'this.tags' }, children: [{ type: 'text' }] }] }] },
+      { type: 'block-level-conditional', children: [{ type: 'branch', attrs: { expression: 'isPro' }, children: [{ type: 'fullwidth', children: [{ type: 'conditional', children: [{ type: 'branch', attrs: { type: 'else' } }] }] }] }] }
+    ])
+
+    expect(blockLoop).toMatchObject({ attrs: { lock: false, expression: 'news.item limit=5' }, style: {} })
+    const [loop] = blockLoop.children[0].children
+    expect(loop).toMatchObject({ attrs: { expression: 'this.tags' }, style: {} })
+    expect(loop.children[0].style.paragraphFontSize).toBe('18px')
+
+    expect(blockConditional).toMatchObject({ attrs: { lock: false }, style: {} })
+    const [branch] = blockConditional.children
+    expect(branch.attrs).toEqual({ expression: 'isPro', type: 'if' })
+    const [conditional] = branch.children[0].children
+    expect(conditional).toMatchObject({ attrs: {}, style: {} })
+    expect(conditional.children[0].attrs.type).toBe('else')
+  })
+
+  test('works out each social icon from its network, icon set and color', async () => {
+    const [defaults, custom] = await fill([
+      { type: 'social', attrs: { elements: [{ type: 'Twitter', link: 'https://x.com/a' }, { type: 'Pinterest', link: 'https://pinterest.com/a' }] } },
+      { type: 'social', attrs: { iconSet: 5, color: 'grey', elements: [{ type: 'TikTok', link: 'https://tiktok.com/@a' }, { type: 'Facebook', src: 'img/my-own.png' }, { type: 'Myspace', link: 'https://myspace.com/a' }] } }
+    ])
+
+    expect(defaults.attrs.elements).toEqual([
+      { type: 'Twitter', link: 'https://x.com/a', src: 'img/Twitter/tw-3-colorful.png' },
+      { type: 'Pinterest', link: 'https://pinterest.com/a', src: 'img/Pinterest/PT-3-colorful.png' }
+    ])
+    expect(custom.attrs.elements).toEqual([
+      { type: 'TikTok', link: 'https://tiktok.com/@a', src: 'img/TikTok/tt-5-grey.png' },
+      { type: 'Facebook', src: 'img/my-own.png' },
+      { type: 'Myspace', link: 'https://myspace.com/a' }
+    ])
   })
 })
 

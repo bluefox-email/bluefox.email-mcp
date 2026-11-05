@@ -12,7 +12,7 @@ or making a param required, is a breaking change.
 ### Added
 - `create_campaign`, `create_transactional_email`, `create_triggered_email`, `update_email`, `manage_automation_email_content` (update): `chamaileonJsonPath` (a local file) or `chamaileonJson` (inline) to upload a Chamaileon visual editor JSON instead of an html/text `body`. The email opens in the app's drag-and-drop editor. On updates this switches an html/text email back to the visual editor.
 - `manage_templates`: `create` can upload a Chamaileon JSON instead of copying a source template, and `update` can replace a template's visual content with one.
-- An uploaded Chamaileon JSON can be short and hand-written: any eid and style/attrs key an element leaves out gets the editor's default. The `chamaileonJson` description shows agents the format.
+- An uploaded Chamaileon JSON can be short and hand-written: any eid and style/attrs key an element leaves out gets the editor's default. The `chamaileonJson` description shows agents the format, covering every Chamaileon element: text, typed-text, button, image, dynamic-image, video, divider, social (17 networks, icon path filled in), code, box, columns, loop, conditional and the block-level loop and conditional.
 - `get_email`, `manage_templates` (get), `manage_automation_email_content` (get): `chamaileonJsonOutputPath` saves the visual editor JSON to a file, to edit it and upload it again.
 
 ### Changed

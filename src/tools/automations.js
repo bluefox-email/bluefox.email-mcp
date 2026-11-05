@@ -343,7 +343,7 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           replyTo: z.string().optional().describe('update only, send-email/notify.'),
           trackOpens: z.boolean().optional().describe('Defaults to true. Set false to stop adding the open-tracking pixel to this email (opens are not recorded). Update only, send-email.'),
           trackClicks: z.boolean().optional().describe('Defaults to true. Set false to send links as-is instead of through the click tracker (clicks are not recorded). Update only, send-email.'),
-          feeds: FEED_SCHEMA.describe('update only, send-email/notify - RSS/Atom/JSON feeds pulled into the body at send time. Only usable with bodyType "html"/"text".'),
+          feeds: FEED_SCHEMA.describe('update only, send-email/notify - RSS/Atom/JSON feeds pulled into the body at send time.'),
           confirm: z.boolean().optional().describe(`add/update/delete only. ${CONFIRM_DESCRIPTION}`)
         }
       },
@@ -460,7 +460,7 @@ export function createAutomationTools ({ client, resolveIdOrRequired, resolveIdO
           replyTo: z.string().optional().describe('update only.'),
           trackOpens: z.boolean().optional().describe('Defaults to true. Set false to stop adding the open-tracking pixel to this email (opens are not recorded). Update only.'),
           trackClicks: z.boolean().optional().describe('Defaults to true. Set false to send links as-is instead of through the click tracker (clicks are not recorded). Update only.'),
-          feeds: FEED_SCHEMA.describe('update only - replaces the full feeds list. RSS/Atom/JSON feeds pulled into this email\'s body at send time (see the "body" field for how to reference a feed\'s variableName from the template). Only usable when bodyType is "html"/"text" (or was previously set) - not for the visual Chamaileon editor.'),
+          feeds: FEED_SCHEMA.describe('update only - replaces the full feeds list. RSS/Atom/JSON feeds pulled into this email\'s body at send time (see the "body" field for how to reference a feed\'s variableName from the template). In a visual (Chamaileon) document, use it as a loop element\'s expression, e.g. news.item limit=5.'),
           confirm: z.boolean().optional().describe(`update only. ${CONFIRM_DESCRIPTION}`)
         }
       },
