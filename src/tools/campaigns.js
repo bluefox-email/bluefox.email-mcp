@@ -4,7 +4,7 @@ import { normalizeScheduledFor } from '../helpers/scheduledFor.js'
 import { feedsSchema } from './feedsSchema.js'
 import { formatEmailDetail } from './emailLifecycle.js'
 import { CONTACT_MERGE_TAGS, WEB_VERSION_MERGE_TAG } from './mergeTags.js'
-import { chamaileonInputSchema, resolveCreateContent } from '../helpers/chamaileonDocument.js'
+import { chamaileonInputSchema, missingUnsubscribeWarning, resolveCreateContent } from '../helpers/chamaileonDocument.js'
 
 export function createCampaignTools ({ client, resolveIdOrRequired, resolveIdOptional }) {
   return [
@@ -99,7 +99,7 @@ export function createCampaignTools ({ client, resolveIdOrRequired, resolveIdOpt
         }
 
         const result = await client.post('/campaigns', body)
-        return textResult(`Created campaign:\n${formatEmailDetail('campaign', result)}`)
+        return textResult(`Created campaign:\n${formatEmailDetail('campaign', result)}${missingUnsubscribeWarning(body.document)}`)
       }
     }
   ]

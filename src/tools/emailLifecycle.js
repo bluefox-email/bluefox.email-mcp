@@ -3,7 +3,7 @@ import { textResult } from '../helpers/errors.js'
 import { normalizeScheduledFor } from '../helpers/scheduledFor.js'
 import { feedsSchema } from './feedsSchema.js'
 import { CONTACT_MERGE_TAGS, WEB_VERSION_MERGE_TAG } from './mergeTags.js'
-import { chamaileonInputSchema, chamaileonOutputSchema, readChamaileonDocument, writeChamaileonDocument } from '../helpers/chamaileonDocument.js'
+import { chamaileonInputSchema, chamaileonOutputSchema, missingUnsubscribeWarning, readChamaileonDocument, writeChamaileonDocument } from '../helpers/chamaileonDocument.js'
 import { rangeInputSchema, timelineInputSchema, buildStatsQuery, formatTimeline } from './statsTimeline.js'
 
 const RESOURCE_PATH = {
@@ -202,7 +202,8 @@ export function createEmailLifecycleTools ({ client, resolveId, resolveIdOptiona
         }
 
         const result = await client.patch(`${RESOURCE_PATH[args.type]}/${id}`, body)
-        return textResult(`Updated ${LABEL[args.type]}:\n${formatEmailDetail(args.type, result)}`)
+        const warning = args.type === 'transactional' ? '' : missingUnsubscribeWarning(chamaileonDocument)
+        return textResult(`Updated ${LABEL[args.type]}:\n${formatEmailDetail(args.type, result)}${warning}`)
       }
     },
     {

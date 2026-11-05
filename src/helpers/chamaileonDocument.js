@@ -18,9 +18,10 @@ export const chamaileonInputSchema = {
     '{"type":"code","attrs":{"title":"Custom HTML","content":"<div style=\\"font-size:16px\\">..</div>"}} (raw HTML, it must set its own font-size), {"type":"dynamic-image","attrs":{"src":"{{this.image.url}}","altText":".."},"style":{"width":"150px","height":"150px"}} (image URL from a merge tag), ' +
     '{"type":"video","attrs":{"videoId":"..","videoProvider":"youtube","link":"https://.."}} (thumbnail generated from the videoId; not in the app editor\'s toolbox). ' +
     'Personalization: {"type":"loop","attrs":{"expression":"news.item limit=5 skip=0"},"children":[elements]} repeats its children per feed item (use {{this.title}} inside; add the feed with the feeds param), and {"type":"conditional","children":[{"type":"branch","attrs":{"type":"if","expression":"(EQ contact.plan \\"pro\\")"},"children":[elements]},{"type":"branch","attrs":{"type":"else"},"children":[elements]}]} (branch type if, else-if or else). block-level-loop and block-level-conditional work the same but sit directly in body and wrap whole fullwidth elements. ' +
+    'To give conditional branches different backgrounds, put a box with the background in each branch: the generator can apply the first branch\'s fullwidth colors to all branches. ' +
     'Nesting: body holds only fullwidth and block-level-*; fullwidth, box, column, loop and branch hold elements; multicolumn holds only column; conditional holds only branch. ' +
     'Colors, fonts and images can use a design system variable, e.g. "color":{"reference":"name","default":"#111111"} (see manage_design_system). ' +
-    'Style values are CSS strings with px units; any eid and style/attrs key left out gets the editor\'s default, so only set what you want to change. Merge tags like {{contact.name}} and {{unsubscribeLink}} work in text and links.')
+    'Style values are CSS strings with px units; any eid and style/attrs key left out gets the editor\'s default, so only set what you want to change. Merge tags like {{contact.name}} and {{unsubscribeLink}} work in text and links; quote strings in them with single quotes, e.g. {{DEFAULT contact.url \'https://..\'}}.')
 }
 
 function isObject (value) {
@@ -117,11 +118,22 @@ function fillSocialIcons (attrs) {
   return { ...attrs, elements }
 }
 
+// Double quotes inside a merge tag break the generated HTML attribute (src, href), single quotes are safe
+function singleQuoteMergeTags (attrs) {
+  const fixed = { ...attrs }
+  for (const key of ['text', 'src', 'link', 'href']) {
+    if (typeof fixed[key] === 'string') {
+      fixed[key] = fixed[key].replace(/\{\{[^{}]*\}\}/g, tag => tag.includes("'") ? tag : tag.replace(/"/g, "'"))
+    }
+  }
+  return fixed
+}
+
 function fillBlockDefaults (block) {
   const defaults = BLOCK_DEFAULTS[block.type]
   const filled = { eid: crypto.randomBytes(8).toString('base64url').slice(0, 10), customData: {}, ...defaults, ...block }
   if (defaults) {
-    filled.attrs = { ...defaults.attrs, ...block.attrs }
+    filled.attrs = singleQuoteMergeTags({ ...defaults.attrs, ...block.attrs })
     // a style linked to a design system component ({ reference, default, ... }) is kept as-is
     if (!block.style?.reference) {
       filled.style = { ...defaults.style, ...block.style }
@@ -188,6 +200,15 @@ export async function resolveCreateContent (args) {
     throw new ResolveError('Provide the email content - either body (html/text) or a Chamaileon JSON (chamaileonJsonPath or chamaileonJson).')
   }
   return { type: args.bodyType || 'text', document: args.body }
+}
+
+// The line to add to the answer when a subscriber-facing design has no way to unsubscribe ('' otherwise). Also
+// counts a link that points at a design system unsubscribe variable.
+export function missingUnsubscribeWarning (document) {
+  if (!isObject(document) || /unsubscribeLink|"reference":"[^"]*unsubscribe/i.test(JSON.stringify(document))) {
+    return ''
+  }
+  return '\nWarning: this design has no {{unsubscribeLink}}, so recipients cannot unsubscribe from the email itself. Add a link to it unless that is intended.'
 }
 
 export const chamaileonOutputSchema = {

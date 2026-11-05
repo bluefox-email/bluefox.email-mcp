@@ -135,6 +135,15 @@ describe('send_triggered_email', () => {
 describe('create_triggered_email with a Chamaileon JSON', () => {
   const chamaileonJson = JSON.stringify({ body: { children: [] } })
 
+  test('warns when the design has no unsubscribe link', async () => {
+    const { client, create_triggered_email: createTriggeredEmail } = setup()
+    client.post.mockResolvedValue({ _id: 'email123', name: 'Welcome', subject: 'Hi', subscriberListId: 'list123' })
+
+    const result = await createTriggeredEmail.handler({ name: 'Welcome', subject: 'Hi', chamaileonJson, subscriberListId: 'list123' })
+
+    expect(result.content[0].text).toContain('Warning: this design has no {{unsubscribeLink}}')
+  })
+
   test('uploads it as the visual editor document', async () => {
     const { client, create_triggered_email: createTriggeredEmail } = setup()
     client.post.mockResolvedValue({ _id: 'email123', name: 'Welcome', subject: 'Hi', subscriberListId: 'list123' })

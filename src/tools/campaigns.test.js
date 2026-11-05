@@ -145,6 +145,18 @@ describe('create_campaign', () => {
 describe('create_campaign with a Chamaileon JSON', () => {
   const chamaileonJson = JSON.stringify({ body: { children: [] } })
 
+  test('warns when the design has no unsubscribe link, not when it has one', async () => {
+    const { client, createCampaign } = setup()
+    client.post.mockResolvedValue({ _id: 'campaign123', name: 'Summer Sale', subject: 'Big discounts', status: 'draft', subscriberListId: 'list123' })
+    const args = { name: 'Summer Sale', subject: 'Big discounts', subscriberListId: 'list123' }
+
+    const missing = await createCampaign.handler({ ...args, chamaileonJson })
+    const present = await createCampaign.handler({ ...args, chamaileonJson: JSON.stringify({ body: { children: [{ type: 'text', attrs: { text: '{{unsubscribeLink}}' } }] } }) })
+
+    expect(missing.content[0].text).toContain('Warning: this design has no {{unsubscribeLink}}')
+    expect(present.content[0].text).not.toContain('Warning')
+  })
+
   test('uploads it as the visual editor document, leaving type to the API default', async () => {
     const { client, createCampaign } = setup()
     client.post.mockResolvedValue({ _id: 'campaign123', name: 'Summer Sale', subject: 'Big discounts', status: 'draft', subscriberListId: 'list123' })

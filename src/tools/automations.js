@@ -3,7 +3,7 @@ import { textResult } from '../helpers/errors.js'
 import { formatAutomationDetail, formatAutomationSummaryLine, formatTrigger, formatExitCriteria, listSteps, formatEmailStats } from './automationFormat.js'
 import { timelineInputSchema, buildStatsQuery, formatTimeline } from './statsTimeline.js'
 import { CONTACT_MERGE_TAGS } from './mergeTags.js'
-import { chamaileonInputSchema, chamaileonOutputSchema, readChamaileonDocument, writeChamaileonDocument } from '../helpers/chamaileonDocument.js'
+import { chamaileonInputSchema, chamaileonOutputSchema, missingUnsubscribeWarning, readChamaileonDocument, writeChamaileonDocument } from '../helpers/chamaileonDocument.js'
 
 const NODE_TYPES = ['delay', 'send-email', 'filter-audience', 'branch', 'complete', 'set-value', 'notify', 'manage-tags', 'webhook', 'condition']
 
@@ -533,9 +533,9 @@ Click tracking: ${email.trackClicks !== false ? 'on' : 'off'}${type === 'chamail
 
         const result = await client.patch(`/automations/${automationId}/email/${args.emailId}`, body)
         if (result.automationId === undefined) {
-          return textResult(`Staged the email content change (not live until merged):\n\n${formatAutomationDetail(result)}`)
+          return textResult(`Staged the email content change (not live until merged):\n\n${formatAutomationDetail(result)}${missingUnsubscribeWarning(chamaileonDocument)}`)
         }
-        return textResult(`Updated email content:\n"${result.subject}" (id ${result._id})`)
+        return textResult(`Updated email content:\n"${result.subject}" (id ${result._id})${missingUnsubscribeWarning(chamaileonDocument)}`)
       }
     },
     {

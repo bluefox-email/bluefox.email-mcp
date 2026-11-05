@@ -3,7 +3,7 @@ import { textResult } from '../helpers/errors.js'
 import { feedsSchema } from './feedsSchema.js'
 import { formatEmailDetail } from './emailLifecycle.js'
 import { CONTACT_MERGE_TAGS } from './mergeTags.js'
-import { chamaileonInputSchema, resolveCreateContent } from '../helpers/chamaileonDocument.js'
+import { chamaileonInputSchema, missingUnsubscribeWarning, resolveCreateContent } from '../helpers/chamaileonDocument.js'
 
 export function createTriggeredEmailTools ({ client, resolveIdOrRequired, resolveIdOptional }) {
   return [
@@ -75,7 +75,7 @@ export function createTriggeredEmailTools ({ client, resolveIdOrRequired, resolv
         }
 
         const result = await client.post('/triggered-emails', body)
-        return textResult(`Created triggered email:\n${formatEmailDetail('triggered', result)}`)
+        return textResult(`Created triggered email:\n${formatEmailDetail('triggered', result)}${missingUnsubscribeWarning(body.document)}`)
       }
     },
     {

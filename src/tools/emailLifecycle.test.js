@@ -559,6 +559,22 @@ describe('list_email_error_log', () => {
 describe('update_email with a Chamaileon JSON', () => {
   const chamaileonJson = JSON.stringify({ body: { children: [] } })
 
+  test('warns about a missing unsubscribe link on campaign and triggered emails only', async () => {
+    const { client, update_email: updateEmail } = setup()
+    client.patch.mockResolvedValue({ _id: 'email123', name: 'Welcome', subject: 'Hi', type: 'chamaileon', document: { body: { children: [] } } })
+    const warning = 'Warning: this design has no {{unsubscribeLink}}'
+
+    const campaign = await updateEmail.handler({ type: 'campaign', emailId: 'email123', chamaileonJson })
+    const triggered = await updateEmail.handler({ type: 'triggered', emailId: 'email123', chamaileonJson })
+    const transactional = await updateEmail.handler({ type: 'transactional', emailId: 'email123', chamaileonJson })
+    const nameOnly = await updateEmail.handler({ type: 'campaign', emailId: 'email123', newName: 'New name' })
+
+    expect(campaign.content[0].text).toContain(warning)
+    expect(triggered.content[0].text).toContain(warning)
+    expect(transactional.content[0].text).not.toContain(warning)
+    expect(nameOnly.content[0].text).not.toContain(warning)
+  })
+
   test('replaces the body with the visual editor document, switching type back to chamaileon', async () => {
     const { client, update_email: updateEmail } = setup()
     client.patch.mockResolvedValue({ _id: 'email123', name: 'Welcome', subject: 'Hi', type: 'chamaileon', document: { body: { children: [] } } })

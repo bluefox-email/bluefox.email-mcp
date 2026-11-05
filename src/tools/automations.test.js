@@ -676,6 +676,20 @@ describe('manage_automation_email_content', () => {
     expect(result.content[0].text).toContain('Staged the email content change (not live until merged)')
   })
 
+  test('update warns when an uploaded Chamaileon JSON has no unsubscribe link, whether live or staged', async () => {
+    const { client, byName } = setup()
+    const args = { action: 'update', automationId: 'auto1', emailId: 'email1', chamaileonJson: JSON.stringify({ body: { children: [] } }), confirm: true }
+    client.patch.mockResolvedValueOnce({ _id: 'email1', automationId: 'auto1', subject: 'Welcome' })
+
+    const live = await byName.manage_automation_email_content.handler(args)
+    expect(live.content[0].text).toContain('Warning: this design has no {{unsubscribeLink}}')
+
+    client.patch.mockResolvedValueOnce({ _id: 'auto1', name: 'Onboarding', status: 'live', nodes: [] })
+    const staged = await byName.manage_automation_email_content.handler(args)
+    expect(staged.content[0].text).toContain('Staged the email content change')
+    expect(staged.content[0].text).toContain('Warning: this design has no {{unsubscribeLink}}')
+  })
+
   test('update uploads a Chamaileon JSON as the visual editor document', async () => {
     const { client, byName } = setup()
     client.patch.mockResolvedValue({ _id: 'email1', automationId: 'auto1', subject: 'Welcome' })

@@ -1,6 +1,6 @@
 import { describe, expect, test, vi, afterEach } from 'vitest'
 import fs from 'fs/promises'
-import { readChamaileonDocument, resolveCreateContent, writeChamaileonDocument } from './chamaileonDocument.js'
+import { missingUnsubscribeWarning, readChamaileonDocument, resolveCreateContent, writeChamaileonDocument } from './chamaileonDocument.js'
 
 vi.mock('fs/promises', () => ({
   default: { readFile: vi.fn(), writeFile: vi.fn() }
@@ -182,6 +182,65 @@ describe('filling in the advanced Chamaileon elements', () => {
       { type: 'Facebook', src: 'img/my-own.png' },
       { type: 'Myspace', link: 'https://myspace.com/a' }
     ])
+  })
+})
+
+describe('merge tag quotes', () => {
+  test('changes double quotes to single quotes inside merge tags, in links, images and text', async () => {
+    const written = {
+      body: {
+        children: [{
+          type: 'fullwidth',
+          children: [
+            { type: 'dynamic-image', attrs: { src: '{{DEFAULT contact.avatar "https://a.com/d.png"}}', link: '{{DEFAULT contact.url "https://a.com"}}' } },
+            { type: 'button', attrs: { href: '{{DEFAULT contact.url "https://a.com"}}' } },
+            { type: 'text', attrs: { text: '<p style="color:red"><a href="{{DEFAULT contact.url "https://a.com"}}">Hi {{DEFAULT contact.name "there"}}</a></p>' } }
+          ]
+        }]
+      }
+    }
+
+    const [image, button, text] = (await readChamaileonDocument({ chamaileonJson: JSON.stringify(written) })).body.children[0].children
+
+    expect(image.attrs).toMatchObject({ src: "{{DEFAULT contact.avatar 'https://a.com/d.png'}}", link: "{{DEFAULT contact.url 'https://a.com'}}" })
+    expect(button.attrs.href).toBe("{{DEFAULT contact.url 'https://a.com'}}")
+    expect(text.attrs.text).toBe('<p style="color:red"><a href="{{DEFAULT contact.url \'https://a.com\'}}">Hi {{DEFAULT contact.name \'there\'}}</a></p>')
+  })
+
+  test('leaves a tag that already has an apostrophe, and design system variable references, alone', async () => {
+    const reference = { reference: 'logo', default: 'https://a.com/l.png' }
+    const written = {
+      body: {
+        children: [{
+          type: 'fullwidth',
+          children: [
+            { type: 'text', attrs: { text: '<p>{{DEFAULT contact.name "it\'s you"}}</p>' } },
+            { type: 'image', attrs: { src: reference } }
+          ]
+        }]
+      }
+    }
+
+    const [text, image] = (await readChamaileonDocument({ chamaileonJson: JSON.stringify(written) })).body.children[0].children
+
+    expect(text.attrs.text).toBe('<p>{{DEFAULT contact.name "it\'s you"}}</p>')
+    expect(image.attrs.src).toEqual(reference)
+  })
+})
+
+describe('missingUnsubscribeWarning', () => {
+  test('warns when the design has no unsubscribe link', () => {
+    expect(missingUnsubscribeWarning({ body: { children: [{ attrs: { text: '<p>Unsubscribe</p>' } }] } })).toContain('Warning: this design has no {{unsubscribeLink}}')
+  })
+
+  test('accepts the merge tag or a design system unsubscribe variable', () => {
+    expect(missingUnsubscribeWarning({ body: { attrs: { text: '<a href="{{unsubscribeLink}}">Leave</a>' } } })).toBe('')
+    expect(missingUnsubscribeWarning({ body: { attrs: { link: { reference: 'unsubscribe', default: '' } } } })).toBe('')
+  })
+
+  test('says nothing about html/text content or no content', () => {
+    expect(missingUnsubscribeWarning('<p>Hi</p>')).toBe('')
+    expect(missingUnsubscribeWarning(undefined)).toBe('')
   })
 })
 
