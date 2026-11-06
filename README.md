@@ -234,10 +234,9 @@ and look up your real options (like your actual subscriber lists) instead of ask
 
 - **No date-range filtering** on list tools - "campaigns from this month" relies on the agent filtering the
   returned list itself, since the API only supports exact-match filters.
-- **Templates** can be listed, renamed, or have their subject/preview text/tags updated, and a new one can be
-  created by duplicating an existing template's visual content - but this tool cannot author or edit that visual
-  content from scratch, and can't create an email directly from a saved template - those only accept plain
-  html/text content.
+- **Visual editor (Chamaileon) content** is uploaded as JSON (`chamaileonJsonPath` / `chamaileonJson`), either
+  written by the agent or exported with `chamaileonJsonOutputPath`. An email can't be created straight from a saved
+  template - export the template's JSON and upload that instead.
 - **API keys** can't be read or changed through this server - manage those from Project Settings in the app. (The
   domain whitelist can be changed, via `manage_project_settings`.)
 - **Webhook `secretKey`** must match one of the project's existing API keys, which this server can't look up for

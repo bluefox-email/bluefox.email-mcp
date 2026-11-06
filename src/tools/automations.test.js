@@ -1,4 +1,7 @@
 import { describe, expect, test } from 'vitest'
+import fs from 'fs/promises'
+import os from 'os'
+import path from 'path'
 import { createAutomationTools } from './automations.js'
 import { createResolveId } from '../helpers/resolveId.js'
 import { createFakeClient } from '../helpers/fakeClient.js'
@@ -584,6 +587,18 @@ describe('manage_automation_email_content', () => {
     expect(result.content[0].text).toContain('Open tracking: off\nClick tracking: off')
   })
 
+  test('get saves the visual editor document to chamaileonJsonOutputPath', async () => {
+    const { client, byName } = setup()
+    const document = { body: { children: [] } }
+    client.get.mockResolvedValue({ _id: 'email1', subject: 'Welcome', document })
+    const outputPath = path.join(os.tmpdir(), `automation-email-export-${Date.now()}.json`)
+
+    const result = await byName.manage_automation_email_content.handler({ action: 'get', automationId: 'auto1', emailId: 'email1', chamaileonJsonOutputPath: outputPath })
+    expect(result.content[0].text).toBe(`"Welcome" (id email1)\nPreview text: (none)\nType: chamaileon\nOpen tracking: on\nClick tracking: on\nSaved the Chamaileon JSON to: ${outputPath}`)
+    expect(JSON.parse(await fs.readFile(outputPath, 'utf8'))).toEqual(document)
+    await fs.rm(outputPath)
+  })
+
   test('get formats an html/text email including the body', async () => {
     const { client, byName } = setup()
     client.get.mockResolvedValue({ _id: 'email1', subject: '', previewText: '', type: 'text', document: 'Hello!' })
@@ -659,6 +674,44 @@ describe('manage_automation_email_content', () => {
     const result = await byName.manage_automation_email_content.handler({ action: 'update', automationId: 'auto1', emailId: 'email1', subject: 'New subject', confirm: true })
 
     expect(result.content[0].text).toContain('Staged the email content change (not live until merged)')
+  })
+
+  test('update preview warns about a missing unsubscribe link before anything is applied', async () => {
+    const { client, byName } = setup()
+    client.get.mockResolvedValue({ _id: 'auto1', name: 'Onboarding', status: 'live', nodes: [] })
+    const args = { action: 'update', automationId: 'auto1', emailId: 'email1' }
+
+    const missing = await byName.manage_automation_email_content.handler({ ...args, chamaileonJson: JSON.stringify({ body: { children: [] } }) })
+    const present = await byName.manage_automation_email_content.handler({ ...args, chamaileonJson: JSON.stringify({ body: { attrs: { text: '{{unsubscribeLink}}' } } }) })
+
+    expect(missing.content[0].text).toContain('Not yet applied')
+    expect(missing.content[0].text).toContain('Warning: this design has no {{unsubscribeLink}}')
+    expect(present.content[0].text).toContain('Not yet applied')
+    expect(present.content[0].text).not.toContain('Warning')
+    expect(client.patch).not.toHaveBeenCalled()
+  })
+
+  test('update warns when an uploaded Chamaileon JSON has no unsubscribe link, whether live or staged', async () => {
+    const { client, byName } = setup()
+    const args = { action: 'update', automationId: 'auto1', emailId: 'email1', chamaileonJson: JSON.stringify({ body: { children: [] } }), confirm: true }
+    client.patch.mockResolvedValueOnce({ _id: 'email1', automationId: 'auto1', subject: 'Welcome' })
+
+    const live = await byName.manage_automation_email_content.handler(args)
+    expect(live.content[0].text).toContain('Warning: this design has no {{unsubscribeLink}}')
+
+    client.patch.mockResolvedValueOnce({ _id: 'auto1', name: 'Onboarding', status: 'live', nodes: [] })
+    const staged = await byName.manage_automation_email_content.handler(args)
+    expect(staged.content[0].text).toContain('Staged the email content change')
+    expect(staged.content[0].text).toContain('Warning: this design has no {{unsubscribeLink}}')
+  })
+
+  test('update uploads a Chamaileon JSON as the visual editor document', async () => {
+    const { client, byName } = setup()
+    client.patch.mockResolvedValue({ _id: 'email1', automationId: 'auto1', subject: 'Welcome' })
+
+    await byName.manage_automation_email_content.handler({ action: 'update', automationId: 'auto1', emailId: 'email1', chamaileonJson: JSON.stringify({ body: { children: [] } }), confirm: true })
+
+    expect(client.patch).toHaveBeenCalledWith('/automations/auto1/email/email1', { type: 'chamaileon', document: expect.objectContaining({ body: expect.objectContaining({ type: 'body', children: [] }) }) })
   })
 
   test('update omits fields that were not given', async () => {
