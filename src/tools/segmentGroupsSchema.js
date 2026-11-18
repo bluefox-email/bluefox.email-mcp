@@ -11,9 +11,9 @@ const OPERATORS = [
 
 const conditionSchema = z.object({
   category: z.enum(['contact-property', 'engagement']).optional().describe('Defaults to "contact-property". Use "engagement" for opened/clicked/received conditions - those have no property field.'),
-  property: z.string().optional().describe('A custom contact field name (see get_contact/manage_contact_fields_and_tags for the registered names), or "createdAt". Required unless operator is "any", a tag operator, or category is "engagement".'),
+  property: z.string().optional().describe('A custom contact field name (see get_contact/manage_contact_fields_and_tags for the registered names), or "createdAt", or "tags" for has-tag/does-not-have-tag. Required unless operator is "any" or category is "engagement".'),
   operator: z.enum(OPERATORS).optional().describe('Defaults to "any" (matches everyone). Day-count date operators take a number of days as value: date-in-last (within the last N days), date-more-than (more than N days ago), date-in-next (within the next N days), date-more-than-ahead (more than N days from now).'),
-  value: z.any().optional().describe('Comparison value - type depends on the operator/property (string, number, boolean, or a date string).')
+  value: z.any().optional().describe('Comparison value - type depends on the operator/property (string, number, boolean, or a date string). Required for contact-property conditions except "any", is-empty, is-not-empty, is-true, is-false. For tag operators it is the tag name. Optional for engagement (number of days).')
 })
 
 export const groupsSchema = z.array(z.object({
