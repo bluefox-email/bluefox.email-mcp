@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Tool names and input schemas are the public API: removing/renaming a tool or param,
 or making a param required, is a breaking change.
 
+## [0.4.1] - 2026-11-18
+
+### Changed
+- Segment conditions (`manage_segment`, `list_contacts`, project unengaged segment): the `property` and `value` descriptions now say that tag operators use property `"tags"` with the tag name as value, and that `value` is required for contact-property operators other than `any`, `is-empty`, `is-not-empty`, `is-true` and `is-false`. The API now rejects conditions that are missing these.
+
 ## [0.4.0] - 2026-11-05
 
 ### Added
