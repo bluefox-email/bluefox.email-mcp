@@ -26,7 +26,7 @@ beforeAll(async () => {
     if (options.headers.Authorization === 'Bearer deleted-key') {
       return apiResponse(403, { error: { name: 'AUTHORIZATION_ERROR', message: 'Permission denied.' } })
     }
-    return apiResponse(200, { result: { _id: PROJECT_ID } })
+    return apiResponse(200, { result: { _id: PROJECT_ID, name: 'Shop' } })
   })
 
   const app = createHostedApp({ baseUrl: API, publicUrl: 'http://localhost', appUrl: 'https://app.bluefox.email/', secret: 'secret', version: '0.0.1' })
@@ -67,7 +67,7 @@ async function connect () {
   const approve = await realFetch(`${base}/oauth/approve`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Origin: 'https://app.bluefox.email' },
-    body: JSON.stringify({ request: consentUrl.searchParams.get('request'), accountId: ACCOUNT_ID, projectId: PROJECT_ID, accessToken: 'user-token' })
+    body: JSON.stringify({ request: consentUrl.searchParams.get('request'), accountId: ACCOUNT_ID, projectIds: [PROJECT_ID], accessToken: 'user-token' })
   })
   const { redirectUrl } = await approve.json()
   const code = new URL(redirectUrl).searchParams.get('code')
@@ -120,11 +120,12 @@ describe('hosted MCP app', () => {
     const { result } = await list.json()
     const gallery = result.tools.find(tool => tool.name === 'manage_gallery')
     expect(gallery.inputSchema.properties.imagePath).toBeUndefined()
+    expect(gallery.inputSchema.properties.project.description).toContain(`"Shop" (${PROJECT_ID})`)
   })
 
   test('answers 401 once the API key behind the token is deleted', async () => {
     const { createSealer } = await import('./sealer.js')
-    const token = createSealer('secret').seal({ type: 'access', projectId: PROJECT_ID, apiKey: 'deleted-key' })
+    const token = createSealer('secret').seal({ type: 'access', projects: [{ projectId: PROJECT_ID, apiKey: 'deleted-key' }] })
 
     const res = await mcpRequest(token, { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} })
 

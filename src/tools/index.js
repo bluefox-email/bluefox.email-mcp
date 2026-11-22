@@ -1,4 +1,5 @@
-import { toToolResult } from '../helpers/errors.js'
+import { z } from 'zod'
+import { toToolResult, ResolveError } from '../helpers/errors.js'
 import { createCampaignTools } from './campaigns.js'
 import { createSubscriberListTools } from './subscriberLists.js'
 import { createTransactionalEmailTools } from './transactionalEmails.js'
@@ -59,13 +60,33 @@ function withoutHostedParams (values) {
 
 export function registerTools (server, deps) {
   for (const tool of collectTools(deps)) {
-    const config = deps.hosted ? { ...tool.config, inputSchema: withoutHostedParams(tool.config.inputSchema) } : tool.config
-    server.registerTool(tool.name, config, async (args, extra) => {
+    server.registerTool(tool.name, tool.config, async (args, extra) => {
       try {
-        return await tool.handler(deps.hosted ? withoutHostedParams(args) : args, extra)
+        return await tool.handler(args, extra)
       } catch (err) {
         return toToolResult(err)
       }
     })
   }
+}
+
+export function registerHostedTools (server, projects) {
+  const toolSets = projects.map(project => collectTools({ ...project.deps, hosted: true }))
+  const names = projects.map(project => `"${project.name}" (${project.projectId})`).join(', ')
+  const projectParam = z.string().optional().describe(`Which bluefox.email project to use, by name or ID. Connected projects: ${names}. Defaults to "${projects[0].name}".`)
+
+  toolSets[0].forEach((tool, index) => {
+    const config = { ...tool.config, inputSchema: { ...withoutHostedParams(tool.config.inputSchema), project: projectParam } }
+    server.registerTool(tool.name, config, async ({ project, ...args }, extra) => {
+      try {
+        const position = project ? projects.findIndex(item => item.projectId === project || item.name.toLowerCase() === project.toLowerCase()) : 0
+        if (position === -1) {
+          throw new ResolveError(`No connected project "${project}". Connected projects: ${names}.`)
+        }
+        return await toolSets[position][index].handler(withoutHostedParams(args), extra)
+      } catch (err) {
+        return toToolResult(err)
+      }
+    })
+  })
 }

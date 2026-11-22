@@ -5,6 +5,7 @@ import { createOAuthProvider } from './oauthProvider.js'
 
 const ACCOUNT_ID = '65bea83c0000000000000001'
 const PROJECT_ID = '65bea83c0000000000000002'
+const OTHER_PROJECT_ID = '65bea83c0000000000000003'
 
 function setup () {
   const sealer = createSealer('secret')
@@ -26,7 +27,7 @@ async function startAuthorize (provider, client, params = {}) {
 async function approveAndGetCode (provider, client) {
   const url = await startAuthorize(provider, client)
   mockFetch(200, { result: { apiKeys: [{ apiKey: 'old' }, { apiKey: 'new-key' }] } })
-  const result = await provider.approve({ request: url.searchParams.get('request'), accountId: ACCOUNT_ID, projectId: PROJECT_ID, accessToken: 'user-token' })
+  const result = await provider.approve({ request: url.searchParams.get('request'), accountId: ACCOUNT_ID, projectIds: [PROJECT_ID], accessToken: 'user-token' })
   return new URL(result.redirectUrl).searchParams.get('code')
 }
 
@@ -82,7 +83,7 @@ describe('approve', () => {
     const url = await startAuthorize(provider, client)
     const fetchSpy = mockFetch(200, { result: { apiKeys: [{ apiKey: 'old' }, { apiKey: 'new-key' }] } })
 
-    const result = await provider.approve({ request: url.searchParams.get('request'), accountId: ACCOUNT_ID, projectId: PROJECT_ID, accessToken: 'user-token' })
+    const result = await provider.approve({ request: url.searchParams.get('request'), accountId: ACCOUNT_ID, projectIds: [PROJECT_ID], accessToken: 'user-token' })
 
     expect(fetchSpy).toHaveBeenCalledWith(`https://api.bluefox.email/v1/accounts/${ACCOUNT_ID}/projects/${PROJECT_ID}/api-keys`, {
       method: 'POST',
@@ -93,7 +94,22 @@ describe('approve', () => {
     expect(result.status).toBe(200)
     expect(redirect.origin + redirect.pathname).toBe('https://claude.ai/callback')
     expect(redirect.searchParams.get('state')).toBe('st1')
-    expect(sealer.open(redirect.searchParams.get('code'))).toMatchObject({ type: 'code', projectId: PROJECT_ID, apiKey: 'new-key' })
+    expect(sealer.open(redirect.searchParams.get('code'))).toMatchObject({ type: 'code', projects: [{ projectId: PROJECT_ID, apiKey: 'new-key' }] })
+  })
+
+  test('creates one key per selected project and skips duplicates', async () => {
+    const { provider, client, sealer } = setup()
+    const url = await startAuthorize(provider, client)
+    const fetchSpy = mockFetch(200, { result: { apiKeys: [{ apiKey: 'new-key' }] } })
+
+    const result = await provider.approve({ request: url.searchParams.get('request'), accountId: ACCOUNT_ID, projectIds: [PROJECT_ID, OTHER_PROJECT_ID, PROJECT_ID], accessToken: 'user-token' })
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2)
+    expect(fetchSpy.mock.calls[1][0]).toBe(`https://api.bluefox.email/v1/accounts/${ACCOUNT_ID}/projects/${OTHER_PROJECT_ID}/api-keys`)
+    expect(sealer.open(new URL(result.redirectUrl).searchParams.get('code')).projects).toEqual([
+      { projectId: PROJECT_ID, apiKey: 'new-key' },
+      { projectId: OTHER_PROJECT_ID, apiKey: 'new-key' }
+    ])
   })
 
   test('leaves state out when the client sent none', async () => {
@@ -127,8 +143,12 @@ describe('approve', () => {
     const url = await startAuthorize(provider, client)
     const request = url.searchParams.get('request')
 
-    expect(await provider.approve({ request, accountId: '../admin', projectId: PROJECT_ID })).toEqual({ status: 400, error: 'Choose a project to connect.' })
-    expect((await provider.approve({ request, accountId: ACCOUNT_ID })).status).toBe(400)
+    const error = { status: 400, error: 'Choose 1 to 20 projects to connect.' }
+    expect(await provider.approve({ request, accountId: '../admin', projectIds: [PROJECT_ID] })).toEqual(error)
+    expect(await provider.approve({ request, accountId: ACCOUNT_ID })).toEqual(error)
+    expect(await provider.approve({ request, accountId: ACCOUNT_ID, projectIds: [] })).toEqual(error)
+    expect(await provider.approve({ request, accountId: ACCOUNT_ID, projectIds: [PROJECT_ID, '../admin'] })).toEqual(error)
+    expect(await provider.approve({ request, accountId: ACCOUNT_ID, projectIds: Array(21).fill(PROJECT_ID) })).toEqual(error)
   })
 
   test('passes the API error through when the key cannot be created', async () => {
@@ -136,7 +156,7 @@ describe('approve', () => {
     const url = await startAuthorize(provider, client)
     mockFetch(403, { error: { message: 'Permission denied.' } })
 
-    const result = await provider.approve({ request: url.searchParams.get('request'), accountId: ACCOUNT_ID, projectId: PROJECT_ID, accessToken: 'bad' })
+    const result = await provider.approve({ request: url.searchParams.get('request'), accountId: ACCOUNT_ID, projectIds: [PROJECT_ID], accessToken: 'bad' })
 
     expect(result).toEqual({ status: 403, error: 'Permission denied.' })
   })
@@ -150,7 +170,7 @@ describe('codes and tokens', () => {
     expect(await provider.challengeForAuthorizationCode(client, code)).toBe('challenge1')
     const tokens = await provider.exchangeAuthorizationCode(client, code, undefined, 'https://claude.ai/callback')
     expect(tokens.token_type).toBe('bearer')
-    expect(sealer.open(tokens.access_token)).toEqual({ type: 'access', projectId: PROJECT_ID, apiKey: 'new-key' })
+    expect(sealer.open(tokens.access_token)).toEqual({ type: 'access', projects: [{ projectId: PROJECT_ID, apiKey: 'new-key' }] })
     expect((await provider.exchangeAuthorizationCode(client, code)).token_type).toBe('bearer')
   })
 
@@ -171,29 +191,42 @@ describe('codes and tokens', () => {
 
   test('verifies a token by checking the key against the API', async () => {
     const { provider, sealer } = setup()
-    const fetchSpy = mockFetch(200, { result: { _id: PROJECT_ID } })
-    const token = sealer.seal({ type: 'access', projectId: PROJECT_ID, apiKey: 'new-key' })
+    const fetchSpy = mockFetch(200, { result: { _id: PROJECT_ID, name: 'Shop' } })
+    const token = sealer.seal({ type: 'access', projects: [{ projectId: PROJECT_ID, apiKey: 'new-key' }] })
 
     const info = await provider.verifyAccessToken(token)
 
     expect(fetchSpy.mock.calls[0][0]).toBe(`https://api.bluefox.email/v1/projectId/${PROJECT_ID}`)
     expect(fetchSpy.mock.calls[0][1].headers.Authorization).toBe('Bearer new-key')
-    expect(info).toMatchObject({ token, scopes: [], extra: { projectId: PROJECT_ID, apiKey: 'new-key' } })
+    expect(info).toMatchObject({ token, scopes: [], extra: { projects: [{ projectId: PROJECT_ID, apiKey: 'new-key', name: 'Shop' }] } })
     expect(info.expiresAt).toBeGreaterThan(Date.now() / 1000)
   })
 
-  test('rejects a garbage token and a token whose key was deleted', async () => {
+  test('drops the projects whose key was deleted', async () => {
     const { provider, sealer } = setup()
-    const token = sealer.seal({ type: 'access', projectId: PROJECT_ID, apiKey: 'deleted' })
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, options) => options.headers.Authorization === 'Bearer deleted'
+      ? { ok: false, status: 403, json: async () => ({ error: { name: 'AUTHORIZATION_ERROR', message: 'Permission denied.' } }) }
+      : { ok: true, status: 200, json: async () => ({ result: { name: 'Blog' } }) })
+    const token = sealer.seal({ type: 'access', projects: [{ projectId: PROJECT_ID, apiKey: 'deleted' }, { projectId: OTHER_PROJECT_ID, apiKey: 'live' }] })
+
+    const info = await provider.verifyAccessToken(token)
+
+    expect(info.extra.projects).toEqual([{ projectId: OTHER_PROJECT_ID, apiKey: 'live', name: 'Blog' }])
+  })
+
+  test('rejects a garbage token, a single-project token and a token whose keys were all deleted', async () => {
+    const { provider, sealer } = setup()
+    const token = sealer.seal({ type: 'access', projects: [{ projectId: PROJECT_ID, apiKey: 'deleted' }] })
     mockFetch(403, { error: { name: 'AUTHORIZATION_ERROR', message: 'Permission denied.' } })
 
     await expect(provider.verifyAccessToken('garbage')).rejects.toThrow(InvalidTokenError)
+    await expect(provider.verifyAccessToken(sealer.seal({ type: 'access', projectId: PROJECT_ID, apiKey: 'k' }))).rejects.toThrow(InvalidTokenError)
     await expect(provider.verifyAccessToken(token)).rejects.toThrow('This connection was removed. Connect bluefox.email again.')
   })
 
   test('passes other API failures through', async () => {
     const { provider, sealer } = setup()
-    const token = sealer.seal({ type: 'access', projectId: PROJECT_ID, apiKey: 'k' })
+    const token = sealer.seal({ type: 'access', projects: [{ projectId: PROJECT_ID, apiKey: 'k' }] })
     mockFetch(500, { error: { name: 'SERVER_ERROR', message: 'Boom' } })
 
     await expect(provider.verifyAccessToken(token)).rejects.toThrow('Boom')

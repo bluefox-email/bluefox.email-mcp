@@ -6,7 +6,7 @@ import { mcpAuthRouter, getOAuthProtectedResourceMetadataUrl } from '@modelconte
 import { requireBearerAuth } from '@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js'
 import { createBluefoxClient } from '../helpers/bluefoxClient.js'
 import { createResolveId } from '../helpers/resolveId.js'
-import { registerTools } from '../tools/index.js'
+import { registerHostedTools } from '../tools/index.js'
 import { createSealer } from './sealer.js'
 import { createOAuthProvider } from './oauthProvider.js'
 
@@ -33,9 +33,12 @@ export function createHostedApp ({ baseUrl, publicUrl, appUrl, secret, version }
   })
 
   app.post('/mcp', requireBearerAuth({ verifier: provider, resourceMetadataUrl: getOAuthProtectedResourceMetadataUrl(mcpUrl) }), express.json({ limit: '10mb' }), async (req, res) => {
-    const client = createBluefoxClient({ baseUrl, ...req.auth.extra })
+    const projects = req.auth.extra.projects.map(project => {
+      const client = createBluefoxClient({ baseUrl, ...project })
+      return { ...project, deps: { client, ...createResolveId(client) } }
+    })
     const server = new McpServer({ name: 'bluefox.email-mcp', version })
-    registerTools(server, { client, ...createResolveId(client), hosted: true })
+    registerHostedTools(server, projects)
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true })
     res.on('close', () => {
       transport.close()

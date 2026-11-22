@@ -5,6 +5,7 @@ const REQUEST_TTL = 60 * 60
 const CODE_TTL = 5 * 60
 const VERIFY_TTL = 60 * 60
 const OBJECT_ID = /^[a-f0-9]{24}$/i
+const MAX_PROJECTS = 20
 
 function now () {
   return Math.floor(Date.now() / 1000)
@@ -67,7 +68,7 @@ export function createOAuthProvider ({ sealer, baseUrl, appUrl }) {
       throw new InvalidGrantError('redirect_uri does not match')
     }
     return {
-      access_token: sealer.seal({ type: 'access', projectId: data.projectId, apiKey: data.apiKey }),
+      access_token: sealer.seal({ type: 'access', projects: data.projects }),
       token_type: 'bearer'
     }
   }
@@ -78,27 +79,34 @@ export function createOAuthProvider ({ sealer, baseUrl, appUrl }) {
 
   async function verifyAccessToken (token) {
     const data = openTyped(token, 'access')
-    if (!data) {
+    if (!data || !Array.isArray(data.projects)) {
       throw new InvalidTokenError('Invalid access token')
     }
-    try {
-      await createBluefoxClient({ baseUrl, projectId: data.projectId, apiKey: data.apiKey }).get('')
-    } catch (err) {
-      if ([401, 403, 404].includes(err.status)) {
-        throw new InvalidTokenError('This connection was removed. Connect bluefox.email again.')
+    const checked = await Promise.all(data.projects.map(async project => {
+      try {
+        const { name } = await createBluefoxClient({ baseUrl, ...project }).get('')
+        return { ...project, name }
+      } catch (err) {
+        if ([401, 403, 404].includes(err.status)) {
+          return undefined
+        }
+        throw err
       }
-      throw err
+    }))
+    const projects = checked.filter(Boolean)
+    if (projects.length === 0) {
+      throw new InvalidTokenError('This connection was removed. Connect bluefox.email again.')
     }
     return {
       token,
       clientId: 'bluefox.email',
       scopes: [],
       expiresAt: now() + VERIFY_TTL,
-      extra: { projectId: data.projectId, apiKey: data.apiKey }
+      extra: { projects }
     }
   }
 
-  async function approve ({ request, accountId, projectId, accessToken, denied }) {
+  async function approve ({ request, accountId, projectIds, accessToken, denied }) {
     const data = openTyped(request, 'request')
     if (!data) {
       return { status: 400, error: 'This sign-in link has expired. Start connecting again from your AI tool.' }
@@ -111,28 +119,31 @@ export function createOAuthProvider ({ sealer, baseUrl, appUrl }) {
       redirect.searchParams.set('error', 'access_denied')
       return { status: 200, redirectUrl: redirect.href }
     }
-    if (!OBJECT_ID.test(accountId) || !OBJECT_ID.test(projectId)) {
-      return { status: 400, error: 'Choose a project to connect.' }
+    if (!OBJECT_ID.test(accountId) || !Array.isArray(projectIds) || projectIds.length === 0 || projectIds.length > MAX_PROJECTS || !projectIds.every(id => OBJECT_ID.test(id))) {
+      return { status: 400, error: `Choose 1 to ${MAX_PROJECTS} projects to connect.` }
     }
 
-    const res = await fetch(`${baseUrl}/v1/accounts/${accountId}/projects/${projectId}/api-keys`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: `MCP - ${data.clientName}` })
-    })
-    const json = await res.json()
-    if (!res.ok) {
-      return { status: res.status, error: json.error.message }
+    const projects = []
+    for (const projectId of new Set(projectIds)) {
+      const res = await fetch(`${baseUrl}/v1/accounts/${accountId}/projects/${projectId}/api-keys`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: `MCP - ${data.clientName}` })
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        return { status: res.status, error: json.error.message }
+      }
+      const apiKeys = json.result.apiKeys
+      projects.push({ projectId, apiKey: apiKeys[apiKeys.length - 1].apiKey })
     }
 
-    const apiKeys = json.result.apiKeys
     redirect.searchParams.set('code', sealer.seal({
       type: 'code',
       clientId: data.clientId,
       redirectUri: data.redirectUri,
       codeChallenge: data.codeChallenge,
-      projectId,
-      apiKey: apiKeys[apiKeys.length - 1].apiKey,
+      projects,
       exp: now() + CODE_TTL
     }))
     return { status: 200, redirectUrl: redirect.href }
