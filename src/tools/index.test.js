@@ -94,3 +94,55 @@ describe('MCP server smoke test', () => {
     expect(result.content[0].text).toBe('Contact not found.')
   })
 })
+
+describe('MCP server in hosted mode', () => {
+  let client
+
+  beforeAll(async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 201,
+      json: async () => ({ status: 201, result: { _id: 'campaign123', name: 'Summer Sale', subject: 'Big discounts', contentType: 'html', status: 'draft', subscriberListId: 'list123' } })
+    })
+
+    const bluefoxClient = createBluefoxClient({ baseUrl: 'https://api.bluefox.email', projectId: 'proj1', apiKey: 'key1' })
+    const server = new McpServer({ name: 'bluefox.email-mcp-test', version: '0.0.1' })
+    registerTools(server, { client: bluefoxClient, ...createResolveId(bluefoxClient), hosted: true })
+
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+    client = new Client({ name: 'test-client', version: '0.0.1' })
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  })
+
+  afterAll(() => {
+    vi.restoreAllMocks()
+  })
+
+  test('hides the params that read or write files on the server', async () => {
+    const { tools } = await client.listTools()
+    const gallery = tools.find(tool => tool.name === 'manage_gallery')
+    const campaign = tools.find(tool => tool.name === 'create_campaign')
+
+    expect(gallery.inputSchema.properties.imagePath).toBeUndefined()
+    expect(gallery.inputSchema.properties.imageUrl).toBeUndefined()
+    expect(gallery.inputSchema.properties.imageBase64).toBeDefined()
+    expect(campaign.inputSchema.properties.chamaileonJsonPath).toBeUndefined()
+    expect(campaign.inputSchema.properties.chamaileonJson).toBeDefined()
+  })
+
+  test('drops a hidden param passed anyway instead of reading the file', async () => {
+    const result = await client.callTool({
+      name: 'create_campaign',
+      arguments: {
+        name: 'Summer Sale',
+        subject: 'Big discounts',
+        body: 'Hello',
+        subscriberListId: 'list123',
+        chamaileonJsonPath: '/etc/passwd'
+      }
+    })
+
+    expect(result.isError).toBeFalsy()
+    expect(result.content[0].text).toContain('Created campaign:')
+  })
+})

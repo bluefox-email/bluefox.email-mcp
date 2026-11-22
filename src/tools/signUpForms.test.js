@@ -12,10 +12,10 @@ beforeEach(() => {
   fs.writeFile.mockClear()
 })
 
-function setup () {
+function setup (extra = {}) {
   const client = createFakeClient()
   const resolveHelpers = createResolveId(client)
-  const tools = createSignUpFormTools({ client, ...resolveHelpers })
+  const tools = createSignUpFormTools({ client, ...resolveHelpers, ...extra })
   const byName = Object.fromEntries(tools.map(tool => [tool.name, tool]))
   return { client, ...byName }
 }
@@ -581,6 +581,17 @@ describe('delete_signup_form', () => {
 })
 
 describe('get_signup_form_embed_html', () => {
+  test('hosted mode returns the embed HTML inline instead of writing a file', async () => {
+    const { client, get_signup_form_embed_html: getEmbedHtml } = setup({ hosted: true })
+    client.getText.mockResolvedValue('<form id="signupForm"></form>')
+    fs.writeFile.mockClear()
+
+    const result = await getEmbedHtml.handler({ signUpFormId: 'form123' })
+
+    expect(fs.writeFile).not.toHaveBeenCalled()
+    expect(result.content[0].text).toBe('Embeddable form HTML:\n<form id="signupForm"></form>')
+  })
+
   test('resolves the form by name, writes the embed HTML to a local file, and reports the path', async () => {
     const { client, get_signup_form_embed_html: getEmbedHtml } = setup()
     client.get.mockResolvedValue({ items: [{ _id: 'form123' }] })

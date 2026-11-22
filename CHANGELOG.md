@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Tool names and input schemas are the public API: removing/renaming a tool or param,
 or making a param required, is a breaking change.
 
+## [0.5.0] - 2026-11-22
+
+### Added
+- Hosted mode (`npm run start:http`, `src/http.js`): the same tools over Streamable HTTP at `/mcp`, for remote connectors in claude.ai, ChatGPT, Claude Code and Cursor. Users connect with OAuth: they log in to the bluefox.email app, pick a project and click Allow, which creates an API key named `MCP - <AI tool>` in that project. Deleting that key disconnects the tool.
+
+### Changed
+- In hosted mode, `imagePath`, `imageUrl`, `chamaileonJsonPath` and `chamaileonJsonOutputPath` are not offered (use `imageBase64` and `chamaileonJson`), and `export_contacts`, `export_domain_dns` and `get_signup_form_embed_html` return the content in the reply instead of saving a file. The local (stdio) server is unchanged.
+
 ## [0.4.0] - 2026-11-05
 
 ### Added

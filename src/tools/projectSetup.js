@@ -26,7 +26,7 @@ function formatAwsConfig (project) {
   return `AWS config for "${project.name}" (status: ${project.status}). Access key: ${awsConfig.accessKeyIdHint || 'none'}. Secret key: ${awsConfig.secretAccessKeyHint || 'none'}. STS role: ${awsConfig.roleArnHint || 'none'}. Region: ${awsConfig.region || 'none'}. Limit: ${awsConfig.limit ?? 'none'} sends/sec. Sender identities: ${identities}.${formatNotByoAwsHint(project)}`
 }
 
-export function createProjectSetupTools ({ client }) {
+export function createProjectSetupTools ({ client, hosted }) {
   return [
     {
       name: 'set_byo_aws_config',
@@ -159,6 +159,9 @@ export function createProjectSetupTools ({ client }) {
       },
       handler: async (args) => {
         const csv = await client.getText(`/domains/${args.domainId}/export/csv`)
+        if (hosted) {
+          return textResult(`DNS records:\n${csv}`)
+        }
         const filePath = path.join(os.tmpdir(), `bluefox-domain-dns-${args.domainId}.csv`)
         await fs.writeFile(filePath, csv, 'utf8')
         return textResult(`Saved DNS records to ${filePath}.`)

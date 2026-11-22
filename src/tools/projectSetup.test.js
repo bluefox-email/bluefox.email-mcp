@@ -7,9 +7,9 @@ vi.mock('fs/promises', () => ({
   default: { writeFile: vi.fn().mockResolvedValue(undefined) }
 }))
 
-function setup () {
+function setup (extra = {}) {
   const client = createFakeClient()
-  const tools = createProjectSetupTools({ client })
+  const tools = createProjectSetupTools({ client, ...extra })
   const byName = Object.fromEntries(tools.map(tool => [tool.name, tool]))
   return { client, ...byName }
 }
@@ -278,5 +278,15 @@ describe('export_domain_dns', () => {
     expect(client.getText).toHaveBeenCalledWith('/domains/dom1/export/csv')
     expect(fs.writeFile).toHaveBeenCalledWith(expect.stringContaining('bluefox-domain-dns-dom1.csv'), 'type,name,value\nCNAME,a,b', 'utf8')
     expect(result.content[0].text).toContain('Saved DNS records to')
+  })
+
+  test('hosted mode returns the CSV inline instead of writing a file', async () => {
+    const { client, export_domain_dns: exportDns } = setup({ hosted: true })
+    client.getText.mockResolvedValue('type,name,value\nCNAME,a,b')
+
+    const result = await exportDns.handler({ domainId: 'dom1' })
+
+    expect(fs.writeFile).not.toHaveBeenCalled()
+    expect(result.content[0].text).toBe('DNS records:\ntype,name,value\nCNAME,a,b')
   })
 })

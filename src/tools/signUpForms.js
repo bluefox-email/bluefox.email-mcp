@@ -134,7 +134,7 @@ function formatFormDetail (item) {
   return lines.join('\n')
 }
 
-export function createSignUpFormTools ({ client, resolveId, resolveIdOptional, resolveIdOrRequired }) {
+export function createSignUpFormTools ({ client, resolveId, resolveIdOptional, resolveIdOrRequired, hosted }) {
   async function resolveSubscriberListIds ({ subscriberListIds, subscriberListNames }) {
     const fromNames = await Promise.all((subscriberListNames || []).map(name => resolveId({
       resourcePath: '/subscriber-lists', name, filterField: 'name', label: 'subscriber list'
@@ -339,6 +339,9 @@ export function createSignUpFormTools ({ client, resolveId, resolveIdOptional, r
           label: 'signup form'
         })
         const html = await client.getText(`/signup-forms/${id}/embed`)
+        if (hosted) {
+          return textResult(`Embeddable form HTML:\n${html}`)
+        }
         const filePath = path.join(os.tmpdir(), `bluefox-signup-form-${id}-embed.html`)
         await fs.writeFile(filePath, html, 'utf8')
         return textResult(`Saved the embeddable form HTML to ${filePath}.`)

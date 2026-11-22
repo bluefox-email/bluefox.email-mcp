@@ -8,10 +8,10 @@ vi.mock('fs/promises', () => ({
   default: { writeFile: vi.fn().mockResolvedValue(undefined) }
 }))
 
-function setup () {
+function setup (extra = {}) {
   const client = createFakeClient()
   const { resolveIdOrRequired } = createResolveId(client)
-  const tools = createContactOpsTools({ client, resolveIdOrRequired })
+  const tools = createContactOpsTools({ client, resolveIdOrRequired, ...extra })
   const byName = Object.fromEntries(tools.map(tool => [tool.name, tool]))
   return { client, ...byName }
 }
@@ -263,6 +263,16 @@ describe('export_contacts', () => {
 
     const [, csv] = fs.writeFile.mock.calls[0]
     expect(csv).toContain('"Smith, ""Ada"""')
+  })
+
+  test('hosted mode returns the CSV inline instead of writing a file', async () => {
+    const { client, export_contacts: exportContacts } = setup({ hosted: true })
+    client.get.mockResolvedValue({ count: 1, items: [{ email: 'a@example.com' }] })
+
+    const result = await exportContacts.handler({})
+
+    expect(fs.writeFile).not.toHaveBeenCalled()
+    expect(result.content[0].text).toBe('Exported 1 contact(s):\nemail,name,tags,_lists,lastOpenDate,lastClickDate,lastReceiveDate,createdAt,updatedAt\na@example.com,,,,,,,,')
   })
 })
 

@@ -51,11 +51,18 @@ export function collectTools (deps) {
   ]
 }
 
+const HOSTED_HIDDEN_PARAMS = ['imagePath', 'imageUrl', 'chamaileonJsonPath', 'chamaileonJsonOutputPath']
+
+function withoutHostedParams (values) {
+  return Object.fromEntries(Object.entries(values).filter(([key]) => !HOSTED_HIDDEN_PARAMS.includes(key)))
+}
+
 export function registerTools (server, deps) {
   for (const tool of collectTools(deps)) {
-    server.registerTool(tool.name, tool.config, async (args, extra) => {
+    const config = deps.hosted ? { ...tool.config, inputSchema: withoutHostedParams(tool.config.inputSchema) } : tool.config
+    server.registerTool(tool.name, config, async (args, extra) => {
       try {
-        return await tool.handler(args, extra)
+        return await tool.handler(deps.hosted ? withoutHostedParams(args) : args, extra)
       } catch (err) {
         return toToolResult(err)
       }

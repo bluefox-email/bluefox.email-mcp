@@ -21,7 +21,7 @@ function toCsv (rows, fields) {
   return lines.join('\n')
 }
 
-export function createContactOpsTools ({ client, resolveIdOrRequired }) {
+export function createContactOpsTools ({ client, resolveIdOrRequired, hosted }) {
   async function runPerContact (emails, action) {
     let succeeded = 0
     const failures = []
@@ -192,6 +192,10 @@ export function createContactOpsTools ({ client, resolveIdOrRequired }) {
           createdAt: row.createdAt,
           updatedAt: row.updatedAt
         }))
+
+        if (hosted) {
+          return textResult(`Exported ${rows.length} contact(s):\n${toCsv(flatRows, fields)}`)
+        }
 
         const filePath = path.join(os.tmpdir(), `bluefox-contacts-export-${Date.now()}.csv`)
         await fs.writeFile(filePath, toCsv(flatRows, fields), 'utf8')
