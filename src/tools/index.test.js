@@ -143,26 +143,29 @@ describe('MCP server in hosted mode', () => {
         subject: 'Big discounts',
         body: 'Hello',
         subscriberListId: 'list123',
-        chamaileonJsonPath: '/etc/passwd'
+        chamaileonJsonPath: '/etc/passwd',
+        project: 'Shop'
       }
     })
 
     expect(result.isError).toBeFalsy()
-    expect(result.content[0].text).toContain('Created campaign:')
+    expect(result.content[1].text).toContain('Created campaign:')
   })
 
-  test('lists the connected projects on every tool and uses the first one by default', async () => {
+  test('requires the project on every tool when several are connected', async () => {
     const { tools } = await client.listTools()
-    expect(tools[0].inputSchema.properties.project.description).toContain('"Shop" (proj1), "Blog" (proj2). Defaults to "Shop".')
+    expect(tools[0].inputSchema.properties.project.description).toContain('"Shop" (proj1), "Blog" (proj2)')
+    expect(tools[0].inputSchema.required).toContain('project')
 
-    await client.callTool({ name: 'create_campaign', arguments: { name: 'Summer Sale', subject: 'Big discounts', body: 'Hello', subscriberListId: 'list123' } })
-    expect(globalThis.fetch.mock.calls.at(-1)[0]).toContain('/v1/projectId/proj1/')
+    const result = await client.callTool({ name: 'create_campaign', arguments: { name: 'Summer Sale', subject: 'Big discounts', body: 'Hello', subscriberListId: 'list123' } })
+    expect(result.isError).toBe(true)
   })
 
   test('runs the tool against the project picked by name or id', async () => {
     const args = { name: 'Summer Sale', subject: 'Big discounts', body: 'Hello', subscriberListId: 'list123' }
 
-    await client.callTool({ name: 'create_campaign', arguments: { ...args, project: 'blog' } })
+    const result = await client.callTool({ name: 'create_campaign', arguments: { ...args, project: 'blog' } })
+    expect(result.content[0].text).toBe('Project: "Blog" (proj2)')
     expect(globalThis.fetch.mock.calls.at(-1)[0]).toContain('/v1/projectId/proj2/')
     expect(globalThis.fetch.mock.calls.at(-1)[1].headers.Authorization).toBe('Bearer key2')
 
@@ -175,7 +178,26 @@ describe('MCP server in hosted mode', () => {
     expect(unknown.isError).toBe(true)
     expect(unknown.content[0].text).toBe('No connected project "Nope". Connected projects: "Shop" (proj1), "Blog" (proj2).')
 
-    const failed = await client.callTool({ name: 'get_contact', arguments: { email: 'missing' } })
+    const failed = await client.callTool({ name: 'get_contact', arguments: { email: 'missing', project: 'Shop' } })
     expect(failed.isError).toBe(true)
+    expect(failed.content[0].text).toBe('Project: "Shop" (proj1)')
+    expect(failed.content[1].text).toBe('Contact not found.')
+  })
+})
+
+describe('MCP server in hosted mode with one project', () => {
+  test('defaults to the only project and still names it', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, status: 200, json: async () => ({ result: { _id: 'c1', email: 'a@b.com' } }) })
+    const bluefoxClient = createBluefoxClient({ baseUrl: 'https://api.bluefox.email', projectId: 'proj1', apiKey: 'key1' })
+    const server = new McpServer({ name: 'bluefox.email-mcp-test', version: '0.0.1' })
+    registerHostedTools(server, [{ projectId: 'proj1', name: 'Shop', deps: { client: bluefoxClient, ...createResolveId(bluefoxClient) } }])
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+    const client = new Client({ name: 'test-client', version: '0.0.1' })
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+
+    const result = await client.callTool({ name: 'get_contact', arguments: { email: 'a@b.com' } })
+
+    expect(result.content[0].text).toBe('Project: "Shop" (proj1)')
+    vi.restoreAllMocks()
   })
 })

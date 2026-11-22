@@ -70,23 +70,37 @@ export function registerTools (server, deps) {
   }
 }
 
+function projectNames (projects) {
+  return projects.map(project => `"${project.name}" (${project.projectId})`).join(', ')
+}
+
+export function hostedInstructions (projects) {
+  return `Connected bluefox.email projects: ${projectNames(projects)}. Every reply starts with the project it ran in. ` +
+    'Always tell the user which project you are working in. Keep using the same project until the user asks to switch, ' +
+    'and when they do, say clearly that you are now working in the other project. Never change project on your own.'
+}
+
 export function registerHostedTools (server, projects) {
   const toolSets = projects.map(project => collectTools({ ...project.deps, hosted: true }))
-  const names = projects.map(project => `"${project.name}" (${project.projectId})`).join(', ')
-  const projectParam = z.string().optional().describe(`Which bluefox.email project to use, by name or ID. Connected projects: ${names}. Defaults to "${projects[0].name}".`)
+  const names = projectNames(projects)
+  const projectParam = projects.length > 1
+    ? z.string().describe(`Which bluefox.email project to use, by name or ID: ${names}. Use the project the user is working in; change it only when the user asks to switch.`)
+    : z.string().optional().describe(`The only connected project is ${names}.`)
 
   toolSets[0].forEach((tool, index) => {
     const config = { ...tool.config, inputSchema: { ...withoutHostedParams(tool.config.inputSchema), project: projectParam } }
     server.registerTool(tool.name, config, async ({ project, ...args }, extra) => {
-      try {
-        const position = project ? projects.findIndex(item => item.projectId === project || item.name.toLowerCase() === project.toLowerCase()) : 0
-        if (position === -1) {
-          throw new ResolveError(`No connected project "${project}". Connected projects: ${names}.`)
-        }
-        return await toolSets[position][index].handler(withoutHostedParams(args), extra)
-      } catch (err) {
-        return toToolResult(err)
+      const selected = project ? projects.find(item => item.projectId === project || item.name.toLowerCase() === project.toLowerCase()) : projects[0]
+      if (!selected) {
+        return toToolResult(new ResolveError(`No connected project "${project}". Connected projects: ${names}.`))
       }
+      let result
+      try {
+        result = await toolSets[projects.indexOf(selected)][index].handler(withoutHostedParams(args), extra)
+      } catch (err) {
+        result = toToolResult(err)
+      }
+      return { ...result, content: [{ type: 'text', text: `Project: "${selected.name}" (${selected.projectId})` }, ...result.content] }
     })
   })
 }

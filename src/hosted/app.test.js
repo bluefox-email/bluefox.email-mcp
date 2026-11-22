@@ -114,13 +114,16 @@ describe('hosted MCP app', () => {
 
     const init = await mcpRequest(token.access_token, { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'test', version: '1' } } })
     expect(init.status).toBe(200)
-    expect((await init.json()).result.serverInfo.name).toBe('bluefox.email-mcp')
+    const { result: initResult } = await init.json()
+    expect(initResult.serverInfo.name).toBe('bluefox.email-mcp')
+    expect(initResult.instructions).toContain(`Connected bluefox.email projects: "Shop" (${PROJECT_ID}).`)
 
     const list = await mcpRequest(token.access_token, { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} })
     const { result } = await list.json()
     const gallery = result.tools.find(tool => tool.name === 'manage_gallery')
     expect(gallery.inputSchema.properties.imagePath).toBeUndefined()
-    expect(gallery.inputSchema.properties.project.description).toContain(`"Shop" (${PROJECT_ID})`)
+    expect(gallery.inputSchema.properties.project.description).toBe(`The only connected project is "Shop" (${PROJECT_ID}).`)
+    expect(gallery.inputSchema.required || []).not.toContain('project')
   })
 
   test('answers 401 once the API key behind the token is deleted', async () => {
