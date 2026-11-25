@@ -1,16 +1,14 @@
 import { InvalidGrantError, InvalidTokenError } from '@modelcontextprotocol/sdk/server/auth/errors.js'
-import { createBluefoxClient } from '../helpers/bluefoxClient.js'
 
 const REQUEST_TTL = 60 * 60
 const CODE_TTL = 5 * 60
 const VERIFY_TTL = 60 * 60
 const OBJECT_ID = /^[a-f0-9]{24}$/i
-const MAX_PROJECTS = 20
 
 function readMcpToken (token) {
   try {
     const data = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString())
-    return data.type === 'mcp' && Array.isArray(data.projectIds) ? data : undefined
+    return data.type === 'mcp' && Array.isArray(data.projects) ? data : undefined
   } catch (err) {
     return undefined
   }
@@ -91,21 +89,7 @@ export function createOAuthProvider ({ sealer, baseUrl, appUrl }) {
     if (!data) {
       throw new InvalidTokenError('Invalid access token')
     }
-    const checked = await Promise.all(data.projectIds.map(async projectId => {
-      try {
-        const { name } = await createBluefoxClient({ baseUrl, projectId, apiKey: token }).get('')
-        return { projectId, name }
-      } catch (err) {
-        if ([401, 403, 404].includes(err.status)) {
-          return undefined
-        }
-        throw err
-      }
-    }))
-    const projects = checked.filter(Boolean)
-    if (projects.length === 0) {
-      throw new InvalidTokenError('This connection was removed. Connect bluefox.email again.')
-    }
+    const projects = data.projects.map(project => ({ projectId: project._id, name: project.name }))
     return {
       token,
       clientId: 'bluefox.email',
@@ -128,8 +112,8 @@ export function createOAuthProvider ({ sealer, baseUrl, appUrl }) {
       redirect.searchParams.set('error', 'access_denied')
       return { status: 200, redirectUrl: redirect.href }
     }
-    if (!OBJECT_ID.test(accountId) || !Array.isArray(projectIds) || projectIds.length === 0 || projectIds.length > MAX_PROJECTS || !projectIds.every(id => OBJECT_ID.test(id))) {
-      return { status: 400, error: `Choose 1 to ${MAX_PROJECTS} projects to connect.` }
+    if (!OBJECT_ID.test(accountId)) {
+      return { status: 400, error: 'Log in again to connect.' }
     }
 
     const res = await fetch(`${baseUrl}/v1/accounts/${accountId}/mcp-connections`, {

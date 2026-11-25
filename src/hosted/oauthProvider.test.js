@@ -11,7 +11,7 @@ function mcpToken (payload) {
   return `header.${Buffer.from(JSON.stringify(payload)).toString('base64url')}.signature`
 }
 
-const TOKEN = mcpToken({ type: 'mcp', projectIds: [PROJECT_ID, OTHER_PROJECT_ID] })
+const TOKEN = mcpToken({ type: 'mcp', projects: [{ _id: PROJECT_ID, name: 'Shop' }, { _id: OTHER_PROJECT_ID, name: 'Blog' }] })
 
 function setup () {
   const sealer = createSealer('secret')
@@ -129,17 +129,15 @@ describe('approve', () => {
     expect((await provider.approve({ request: 'garbage' })).status).toBe(400)
   })
 
-  test('rejects ids that are not object ids', async () => {
+  test('rejects an account id that is not an object id', async () => {
     const { provider, client } = setup()
     const url = await startAuthorize(provider, client)
-    const request = url.searchParams.get('request')
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
 
-    const error = { status: 400, error: 'Choose 1 to 20 projects to connect.' }
-    expect(await provider.approve({ request, accountId: '../admin', projectIds: [PROJECT_ID] })).toEqual(error)
-    expect(await provider.approve({ request, accountId: ACCOUNT_ID })).toEqual(error)
-    expect(await provider.approve({ request, accountId: ACCOUNT_ID, projectIds: [] })).toEqual(error)
-    expect(await provider.approve({ request, accountId: ACCOUNT_ID, projectIds: [PROJECT_ID, '../admin'] })).toEqual(error)
-    expect(await provider.approve({ request, accountId: ACCOUNT_ID, projectIds: Array(21).fill(PROJECT_ID) })).toEqual(error)
+    const result = await provider.approve({ request: url.searchParams.get('request'), accountId: '../admin', projectIds: [PROJECT_ID] })
+
+    expect(result).toEqual({ status: 400, error: 'Log in again to connect.' })
+    expect(fetchSpy).not.toHaveBeenCalled()
   })
 
   test('passes the API error through when the connection cannot be created', async () => {
@@ -179,44 +177,23 @@ describe('codes and tokens', () => {
     await expect(provider.exchangeRefreshToken(client, 'r')).rejects.toThrow('Refresh tokens are not supported')
   })
 
-  test('verifies a token by checking each project against the API', async () => {
+  test('reads the projects from the token without calling the API', async () => {
     const { provider } = setup()
-    const fetchSpy = mockFetch(200, { result: { name: 'Shop' } })
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
 
     const info = await provider.verifyAccessToken(TOKEN)
 
-    expect(fetchSpy.mock.calls[0][0]).toBe(`https://api.bluefox.email/v1/projectId/${PROJECT_ID}`)
-    expect(fetchSpy.mock.calls[0][1].headers.Authorization).toBe(`Bearer ${TOKEN}`)
-    expect(info).toMatchObject({ token: TOKEN, scopes: [], extra: { token: TOKEN, projects: [{ projectId: PROJECT_ID, name: 'Shop' }, { projectId: OTHER_PROJECT_ID, name: 'Shop' }] } })
+    expect(fetchSpy).not.toHaveBeenCalled()
+    expect(info).toMatchObject({ token: TOKEN, scopes: [], extra: { token: TOKEN, projects: [{ projectId: PROJECT_ID, name: 'Shop' }, { projectId: OTHER_PROJECT_ID, name: 'Blog' }] } })
     expect(info.expiresAt).toBeGreaterThan(Date.now() / 1000)
   })
 
-  test('drops the projects that were disconnected', async () => {
-    const { provider } = setup()
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async url => url.endsWith(PROJECT_ID)
-      ? { ok: false, status: 401, json: async () => ({ error: { name: 'AUTHENTICATION_ERROR', message: 'This connection was removed. Connect again.' } }) }
-      : { ok: true, status: 200, json: async () => ({ result: { name: 'Blog' } }) })
-
-    const info = await provider.verifyAccessToken(TOKEN)
-
-    expect(info.extra.projects).toEqual([{ projectId: OTHER_PROJECT_ID, name: 'Blog' }])
-  })
-
-  test('rejects garbage, a non-mcp token, an old sealed token and a token whose projects were all disconnected', async () => {
+  test('rejects garbage, a non-mcp token and an old token without projects', async () => {
     const { provider, sealer } = setup()
-    mockFetch(403, { error: { name: 'AUTHORIZATION_ERROR', message: 'Permission denied.' } })
 
     await expect(provider.verifyAccessToken('garbage')).rejects.toThrow(InvalidTokenError)
     await expect(provider.verifyAccessToken(mcpToken({ type: 'user' }))).rejects.toThrow(InvalidTokenError)
-    await expect(provider.verifyAccessToken(mcpToken({ type: 'mcp' }))).rejects.toThrow(InvalidTokenError)
+    await expect(provider.verifyAccessToken(mcpToken({ type: 'mcp', projectIds: [PROJECT_ID] }))).rejects.toThrow(InvalidTokenError)
     await expect(provider.verifyAccessToken(sealer.seal({ type: 'access', projects: [] }))).rejects.toThrow(InvalidTokenError)
-    await expect(provider.verifyAccessToken(TOKEN)).rejects.toThrow('This connection was removed. Connect bluefox.email again.')
-  })
-
-  test('passes other API failures through', async () => {
-    const { provider } = setup()
-    mockFetch(500, { error: { name: 'SERVER_ERROR', message: 'Boom' } })
-
-    await expect(provider.verifyAccessToken(TOKEN)).rejects.toThrow('Boom')
   })
 })

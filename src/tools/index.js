@@ -98,7 +98,7 @@ export function registerHostedTools (server, projects) {
       try {
         result = await toolSets[projects.indexOf(selected)][index].handler(withoutHostedParams(args), extra)
       } catch (err) {
-        result = toToolResult(err)
+        result = toToolResult(err.name === 'AUTHORIZATION_ERROR' ? new ResolveError(`No access to "${selected.name}": it was disconnected, or your role in this project doesn't allow this action.`) : err)
       }
       return { ...result, content: [{ type: 'text', text: `Project: "${selected.name}" (${selected.projectId})` }, ...result.content] }
     })

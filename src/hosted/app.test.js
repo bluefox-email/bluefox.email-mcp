@@ -11,7 +11,7 @@ let base
 let server
 
 function mcpToken (connectionId) {
-  return `header.${Buffer.from(JSON.stringify({ type: 'mcp', connectionId, projectIds: [PROJECT_ID] })).toString('base64url')}.signature`
+  return `header.${Buffer.from(JSON.stringify({ type: 'mcp', connectionId, projects: [{ _id: PROJECT_ID, name: 'Shop' }] })).toString('base64url')}.signature`
 }
 
 function apiResponse (status, json) {
@@ -130,8 +130,18 @@ describe('hosted MCP app', () => {
     expect(gallery.inputSchema.required || []).not.toContain('project')
   })
 
-  test('answers 401 once the connection is removed', async () => {
-    const res = await mcpRequest(mcpToken('removed'), { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} })
+  test('answers a tool call on a removed connection with a clear tool error', async () => {
+    const res = await mcpRequest(mcpToken('removed'), { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'get_contact', arguments: { email: 'a@b.com' } } })
+    const { result } = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe(`Project: "Shop" (${PROJECT_ID})`)
+    expect(result.content[1].text).toBe('No access to "Shop": it was disconnected, or your role in this project doesn\'t allow this action.')
+  })
+
+  test('answers 401 for a token that is not an mcp token', async () => {
+    const res = await mcpRequest('garbage', { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} })
 
     expect(res.status).toBe(401)
   })
