@@ -7,6 +7,15 @@ const VERIFY_TTL = 60 * 60
 const OBJECT_ID = /^[a-f0-9]{24}$/i
 const MAX_PROJECTS = 20
 
+function readMcpToken (token) {
+  try {
+    const data = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString())
+    return data.type === 'mcp' && Array.isArray(data.projectIds) ? data : undefined
+  } catch (err) {
+    return undefined
+  }
+}
+
 function now () {
   return Math.floor(Date.now() / 1000)
 }
@@ -68,7 +77,7 @@ export function createOAuthProvider ({ sealer, baseUrl, appUrl }) {
       throw new InvalidGrantError('redirect_uri does not match')
     }
     return {
-      access_token: sealer.seal({ type: 'access', projects: data.projects }),
+      access_token: data.token,
       token_type: 'bearer'
     }
   }
@@ -78,14 +87,14 @@ export function createOAuthProvider ({ sealer, baseUrl, appUrl }) {
   }
 
   async function verifyAccessToken (token) {
-    const data = openTyped(token, 'access')
-    if (!data || !Array.isArray(data.projects)) {
+    const data = readMcpToken(token)
+    if (!data) {
       throw new InvalidTokenError('Invalid access token')
     }
-    const checked = await Promise.all(data.projects.map(async project => {
+    const checked = await Promise.all(data.projectIds.map(async projectId => {
       try {
-        const { name } = await createBluefoxClient({ baseUrl, ...project }).get('')
-        return { ...project, name }
+        const { name } = await createBluefoxClient({ baseUrl, projectId, apiKey: token }).get('')
+        return { projectId, name }
       } catch (err) {
         if ([401, 403, 404].includes(err.status)) {
           return undefined
@@ -102,7 +111,7 @@ export function createOAuthProvider ({ sealer, baseUrl, appUrl }) {
       clientId: 'bluefox.email',
       scopes: [],
       expiresAt: now() + VERIFY_TTL,
-      extra: { projects }
+      extra: { token, projects }
     }
   }
 
@@ -123,19 +132,14 @@ export function createOAuthProvider ({ sealer, baseUrl, appUrl }) {
       return { status: 400, error: `Choose 1 to ${MAX_PROJECTS} projects to connect.` }
     }
 
-    const projects = []
-    for (const projectId of new Set(projectIds)) {
-      const res = await fetch(`${baseUrl}/v1/accounts/${accountId}/projects/${projectId}/api-keys`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: `MCP - ${data.clientName}` })
-      })
-      const json = await res.json()
-      if (!res.ok) {
-        return { status: res.status, error: json.error.message }
-      }
-      const apiKeys = json.result.apiKeys
-      projects.push({ projectId, apiKey: apiKeys[apiKeys.length - 1].apiKey })
+    const res = await fetch(`${baseUrl}/v1/accounts/${accountId}/mcp-connections`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: data.clientName, projectIds })
+    })
+    const json = await res.json()
+    if (!res.ok) {
+      return { status: res.status, error: json.error.message }
     }
 
     redirect.searchParams.set('code', sealer.seal({
@@ -143,7 +147,7 @@ export function createOAuthProvider ({ sealer, baseUrl, appUrl }) {
       clientId: data.clientId,
       redirectUri: data.redirectUri,
       codeChallenge: data.codeChallenge,
-      projects,
+      token: json.result.token,
       exp: now() + CODE_TTL
     }))
     return { status: 200, redirectUrl: redirect.href }

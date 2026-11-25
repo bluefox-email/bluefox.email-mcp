@@ -10,6 +10,10 @@ const realFetch = globalThis.fetch
 let base
 let server
 
+function mcpToken (connectionId) {
+  return `header.${Buffer.from(JSON.stringify({ type: 'mcp', connectionId, projectIds: [PROJECT_ID] })).toString('base64url')}.signature`
+}
+
 function apiResponse (status, json) {
   return { ok: status < 400, status, json: async () => json }
 }
@@ -20,10 +24,10 @@ beforeAll(async () => {
     if (!href.startsWith(API)) {
       return realFetch(url, options)
     }
-    if (href.endsWith('/api-keys')) {
-      return apiResponse(200, { result: { apiKeys: [{ apiKey: 'mcp-key' }] } })
+    if (href.endsWith('/mcp-connections')) {
+      return apiResponse(200, { result: { token: mcpToken('connection1') } })
     }
-    if (options.headers.Authorization === 'Bearer deleted-key') {
+    if (options.headers.Authorization === `Bearer ${mcpToken('removed')}`) {
       return apiResponse(403, { error: { name: 'AUTHORIZATION_ERROR', message: 'Permission denied.' } })
     }
     return apiResponse(200, { result: { _id: PROJECT_ID, name: 'Shop' } })
@@ -126,11 +130,8 @@ describe('hosted MCP app', () => {
     expect(gallery.inputSchema.required || []).not.toContain('project')
   })
 
-  test('answers 401 once the API key behind the token is deleted', async () => {
-    const { createSealer } = await import('./sealer.js')
-    const token = createSealer('secret').seal({ type: 'access', projects: [{ projectId: PROJECT_ID, apiKey: 'deleted-key' }] })
-
-    const res = await mcpRequest(token, { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} })
+  test('answers 401 once the connection is removed', async () => {
+    const res = await mcpRequest(mcpToken('removed'), { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} })
 
     expect(res.status).toBe(401)
   })

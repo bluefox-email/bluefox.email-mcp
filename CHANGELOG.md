@@ -10,7 +10,7 @@ or making a param required, is a breaking change.
 ## [0.5.0] - 2026-11-22
 
 ### Added
-- Hosted mode (`npm run start:http`, `src/http.js`): the same tools over Streamable HTTP at `/mcp`, for remote connectors in claude.ai, ChatGPT, Claude Code and Cursor. Users connect with OAuth: they log in to the bluefox.email app, pick one or more projects and click Allow, which creates an API key named `MCP - <AI tool>` in each of them. Every tool takes a `project` (name or ID), required when more than one project is connected, and every reply starts with `Project: "<name>" (<id>)`. Deleting a key disconnects that project.
+- Hosted mode (`npm run start:http`, `src/http.js`): the same tools over Streamable HTTP at `/mcp`, for remote connectors in claude.ai, ChatGPT, Claude Code and Cursor. Users connect with OAuth: they log in to the bluefox.email app, pick one or more projects and click Allow. The API creates a remote MCP connection on each project and returns one `mcp` token that works only on the public project routes and follows the user's current role (client viewers can only read, client editors can't change project settings). Every tool takes a `project` (name or ID), required when more than one project is connected, and every reply starts with `Project: "<name>" (<id>)`. Removing the connection from a project (API keys settings in the app) disconnects that project.
 
 ### Changed
 - In hosted mode, `imagePath`, `imageUrl`, `chamaileonJsonPath` and `chamaileonJsonOutputPath` are not offered (use `imageBase64` and `chamaileonJson`), and `export_contacts`, `export_domain_dns` and `get_signup_form_embed_html` return the content in the reply instead of saving a file. The local (stdio) server is unchanged.

@@ -34,7 +34,7 @@ export function createHostedApp ({ baseUrl, publicUrl, appUrl, secret, version }
 
   app.post('/mcp', requireBearerAuth({ verifier: provider, resourceMetadataUrl: getOAuthProtectedResourceMetadataUrl(mcpUrl) }), express.json({ limit: '10mb' }), async (req, res) => {
     const projects = req.auth.extra.projects.map(project => {
-      const client = createBluefoxClient({ baseUrl, ...project })
+      const client = createBluefoxClient({ baseUrl, projectId: project.projectId, apiKey: req.auth.extra.token })
       return { ...project, deps: { client, ...createResolveId(client) } }
     })
     const server = new McpServer({ name: 'bluefox.email-mcp', version }, { instructions: hostedInstructions(projects) })
